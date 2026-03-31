@@ -1,0 +1,1098 @@
+import { ItemDatabase, EconomyRules } from './db.js?v=7.1';
+
+export class UIManager {
+    constructor(game) {
+        this.game = game;
+        this.inv = game.inventory;
+
+        this.mainMenu = document.getElementById('main-menu');
+        this.gameContainer = document.getElementById('game-container');
+
+        this.shopMoney = document.getElementById('money-text');
+        this.shopItems = document.getElementById('shop-items');
+        this.stashGrid = document.getElementById('stash-grid');
+        this.backpackGrid = document.getElementById('backpack-grid');
+        this.primaryGrid = document.getElementById('primary-grid');
+        this.primaryGrid2 = document.getElementById('primary-grid-2');
+        this.secondaryGrid = document.getElementById('secondary-grid');
+        this.meleeGrid = document.getElementById('melee-grid');
+        this.armorGrid = document.getElementById('armor-grid');
+        this.helmetGrid = document.getElementById('helmet-grid');
+        this.hotbarGrid = document.getElementById('hotbar-grid');
+        this.backpackEquipGrid = document.getElementById('backpack-equip-grid');
+        this.secureGrid = document.getElementById('secure-grid');
+        this.secureSelect = document.getElementById('secure-container-select');
+
+        this.shopPanel = document.getElementById('shop-panel');
+        this.inventoryPanel = document.getElementById('inventory-panel');
+
+        this.cellSize = 50; // Match CSS Grid size
+
+        // Custom Drag & Drop State
+        this.attachedItemId = null;
+        this.attachedElement = null; // visual element following cursor
+        this.dropPreviewElement = null; // transparent green/red shadow
+
+        // Offset for dragging so it attaches from where clicked
+        this.grabOffsetX = 0;
+        this.grabOffsetY = 0;
+
+        // Stats Modal
+        this.statsModal = document.getElementById('item-stats-modal');
+        this.statsTitle = document.getElementById('stats-title');
+        this.statsContent = document.getElementById('stats-content');
+
+        this.bindEvents();
+    }
+
+    bindEvents() {
+        // Tab Switching
+        const tabStash = document.getElementById('tab-stash');
+        if (tabStash) {
+            tabStash.addEventListener('click', (e) => {
+                tabStash.classList.add('active');
+                const tabShop = document.getElementById('tab-shop');
+                if (tabShop) tabShop.classList.remove('active');
+                this.shopPanel.classList.add('hidden');
+                this.inventoryPanel.classList.remove('hidden');
+                this.refreshInventory();
+            });
+        }
+
+        const tabShopBtn = document.getElementById('tab-shop');
+        if (tabShopBtn) {
+            tabShopBtn.addEventListener('click', (e) => {
+                tabShopBtn.classList.add('active');
+                if (tabStash) tabStash.classList.remove('active');
+                this.inventoryPanel.classList.add('hidden');
+                this.shopPanel.classList.remove('hidden');
+                this.refreshShop();
+            });
+        }
+
+        // Enter Raid / Back to Menu
+        const btnEnterRaid = document.getElementById('btn-enter-raid');
+        if (btnEnterRaid) {
+            btnEnterRaid.addEventListener('click', () => {
+                // Read selected map
+                const mapSelect = document.getElementById('map-select');
+                if (mapSelect) this.game.currentMap = parseInt(mapSelect.value) || 1;
+                this.mainMenu.classList.add('hidden');
+                this.gameContainer.classList.remove('hidden');
+                this.game.isInMenu = false;
+                // Re-calc weight when entering just in case
+                this.inv.updatePlayerWeight();
+                this.game.switchWeapon(1);
+                this.game.updateHUD();
+                // Spawn Bot near player after entering raid
+                this.game.spawnTestBot();
+            });
+        }
+
+        const backToMenuAction = () => {
+            this.mainMenu.classList.remove('hidden');
+            this.gameContainer.classList.add('hidden');
+            this.game.resetSession();
+            this.game.isInMenu = true;
+            this.refreshInventory();
+        };
+
+        const btnBackMenu = document.getElementById('btn-back-menu'); // Legacy if still exists
+        if (btnBackMenu) btnBackMenu.addEventListener('click', backToMenuAction);
+
+        const btnBackMenuFail = document.getElementById('btn-back-menu-fail');
+        if (btnBackMenuFail) btnBackMenuFail.addEventListener('click', backToMenuAction);
+
+        const btnBackMenuWin = document.getElementById('btn-back-menu-win');
+        if (btnBackMenuWin) btnBackMenuWin.addEventListener('click', backToMenuAction);
+
+        // ESC to Exit Raid / R for rotation / Drop item if holding
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                if (this.attachedItemId !== null) {
+                    // Cancel drag
+                    this.clearAttachment();
+                    this.refreshInventory();
+                } else if (!this.game.isInMenu) {
+                    document.getElementById('btn-back-menu').click();
+                }
+            }
+            if (e.key.toLowerCase() === 'r') {
+                if (this.attachedItemId !== null && this.attachedElement) {
+                    const item = this.inv.items.find(i => i.id === this.attachedItemId);
+                    if (item && item.container !== 'hotbarSlot') {
+                        this.dragRotated = !this.dragRotated; // visually update without altering DB
+                        const dbItem = ItemDatabase[item.typeId];
+                        let w = this.dragRotated ? dbItem.gridH : dbItem.gridW;
+                        let h = this.dragRotated ? dbItem.gridW : dbItem.gridH;
+                        this.attachedElement.style.width = (w * this.cellSize) + 'px';
+                        this.attachedElement.style.height = (h * this.cellSize) + 'px';
+                        this.attachedElement.style.borderStyle = this.dragRotated ? "dashed" : "solid";
+                        // Update preview immediately
+                        this.handleMouseMove(this.lastMouseE);
+                    }
+                }
+            }
+            if (e.key.toLowerCase() === 'tab') {
+                e.preventDefault();
+                if (!this.game.isInMenu) {
+                    if (this.inventoryPanel.classList.contains('hidden') || this.inventoryPanel.style.display === 'none') {
+                        document.getElementById('game-container').appendChild(this.inventoryPanel);
+                        this.inventoryPanel.style.position = 'absolute';
+                        this.inventoryPanel.style.top = '0';
+                        this.inventoryPanel.style.left = '0';
+                        this.inventoryPanel.style.width = '100%';
+                        this.inventoryPanel.style.height = '100%';
+                        this.inventoryPanel.style.transform = 'none';
+                        this.inventoryPanel.style.background = '#1e1e1e'; // 直接覆蓋原畫面底色
+                        this.inventoryPanel.style.zIndex = '2000'; // 確保在 canvas 與 hud 上層
+                        this.inventoryPanel.style.justifyContent = 'center';
+                        this.inventoryPanel.style.alignItems = 'center';
+                        this.inventoryPanel.style.paddingTop = '0';
+                        this.inventoryPanel.classList.remove('hidden');
+                        this.inventoryPanel.style.display = 'flex';
+                        
+                        // Create solid background wrapper container
+                        if (!this.inRaidBgWrapper) {
+                            this.inRaidBgWrapper = document.createElement('div');
+                            this.inRaidBgWrapper.style.background = '#2a2a2a';
+                            this.inRaidBgWrapper.style.padding = '20px';
+                            this.inRaidBgWrapper.style.border = '2px solid #555';
+                            this.inRaidBgWrapper.style.display = 'flex';
+                            this.inRaidBgWrapper.style.gap = '20px';
+                            this.inRaidBgWrapper.style.boxShadow = '0 0 20px rgba(0,0,0,0.8)';
+                        }
+                        this.inventoryPanel.appendChild(this.inRaidBgWrapper);
+                        
+                        const equipCol = document.getElementById('equip-column');
+                        if (equipCol) this.inRaidBgWrapper.appendChild(equipCol);
+                        
+                        const bpPanel = document.getElementById('backpack-panel');
+                        if (bpPanel) this.inRaidBgWrapper.appendChild(bpPanel);
+                        
+                        const stashParent = document.getElementById('stash-grid').closest('.left-panel') || document.getElementById('stash-grid').parentElement;
+                        if (stashParent) stashParent.style.display = 'none';
+                        
+                        this.game.isInventoryOpen = true;
+                        this.refreshInventory();
+                    } else {
+                        this.closeInRaidInventory();
+                    }
+                    return;
+                }
+            }
+            if (e.key.toLowerCase() === 'f') {
+                if (!this.lastMouseE) return; // need mouse pos
+                // Check what element we are hovering over
+                const elem = document.elementFromPoint(this.lastMouseE.clientX, this.lastMouseE.clientY);
+                if (elem) {
+                    const invItemDiv = elem.closest('.inventory-item');
+                    const shopItemDiv = elem.closest('.shop-buy-btn') ? elem.closest('.shop-buy-btn').parentElement : elem.closest('[data-typeid]');
+
+                    if (invItemDiv && invItemDiv.dataset.itemid) {
+                        const itemObj = this.inv.items.find(i => i.id == invItemDiv.dataset.itemid);
+                        if (itemObj) {
+                            const dbItem = ItemDatabase[itemObj.typeId];
+                            this.showItemStats(this.lastMouseE.pageX, this.lastMouseE.pageY, dbItem, itemObj);
+                        }
+                    } else if (shopItemDiv && shopItemDiv.dataset.typeid) {
+                        const dbItem = ItemDatabase[shopItemDiv.dataset.typeid];
+                        this.showItemStats(this.lastMouseE.pageX, this.lastMouseE.pageY, dbItem, null);
+                    }
+                }
+            }
+        });
+
+        // Global mouse move for attached item
+        document.addEventListener('mousemove', (e) => this.handleMouseMove(e));
+
+        // Auto-close stats panel on any click outside it
+        document.addEventListener('mousedown', (e) => {
+            if (this.statsModal && !this.statsModal.classList.contains('hidden')) {
+                if (!this.statsModal.contains(e.target)) {
+                    this.statsModal.classList.add('hidden');
+                }
+            }
+        });
+
+        // Global mouse release to handle dropping
+        document.addEventListener('mouseup', (e) => {
+            if (e.button !== 0) return; // only left click
+            if (this.attachedItemId !== null) {
+                // Don't drop immediately if clicking a delete button to sell
+                if (e.target.classList && e.target.classList.contains('item-delete-btn')) return;
+
+                if (this.currentHoverContainer && this.hoverValid) {
+                    if (this.inv.moveItem(this.attachedItemId, this.currentHoverContainer, this.currentHoverGridX, this.currentHoverGridY, this.dragRotated)) {
+                        this.clearAttachment();
+                        this.refreshInventory();
+                        this.game.updateHUD();
+                    } else {
+                        // Move failed (shouldn't happen often if hoverValid is true, but just in case)
+                        this.clearAttachment();
+                        this.refreshInventory();
+                    }
+                } else {
+                    const elem = document.elementFromPoint(e.clientX, e.clientY);
+                    const invItemDiv = elem ? elem.closest('.inventory-item') : null;
+                    if (invItemDiv && invItemDiv.dataset.itemid) {
+                        const targetItemObj = this.inv.items.find(i => i.id == invItemDiv.dataset.itemid);
+                        const sourceItemObj = this.inv.items.find(i => i.id == this.attachedItemId);
+                        
+                        if (targetItemObj && sourceItemObj) {
+                            const dbSource = ItemDatabase[sourceItemObj.typeId];
+                            const dbTarget = ItemDatabase[targetItemObj.typeId];
+                            
+                            if (dbSource.type === 'repair' && (dbTarget.type === 'armor' || dbTarget.type === 'helmet')) {
+                                if (this.game.isInMenu) {
+                                    this.game.startRepair(sourceItemObj, targetItemObj);
+                                } else {
+                                    // In-raid: Start repair immediately without modal
+                                    this.game.executeRepair(sourceItemObj, targetItemObj);
+                                }
+                            }
+                        }
+                    }
+
+                    // Dropped in invalid area, return to original position
+                    this.clearAttachment();
+                    this.refreshInventory();
+                }
+            }
+        });
+
+        // Global click to hide stats modal (only when clicking outside it)
+        document.addEventListener('click', (e) => {
+            if (e.button === 0 && !this.statsModal.classList.contains('hidden')) {
+                if (!this.statsModal.contains(e.target)) {
+                    this.statsModal.classList.add('hidden');
+                }
+            }
+        });
+
+        // Close button for stats modal
+        const statsCloseBtn = document.getElementById('stats-close-btn');
+        if (statsCloseBtn) {
+            statsCloseBtn.addEventListener('click', () => {
+                this.statsModal.classList.add('hidden');
+            });
+        }
+
+        this.setupDropZone(this.stashGrid, 'stash');
+        this.setupDropZone(this.backpackGrid, 'backpack');
+        this.setupDropZone(this.primaryGrid, 'primaryWep');
+        this.setupDropZone(this.primaryGrid2, 'primaryWep2');
+        this.setupDropZone(this.secondaryGrid, 'secondaryWep');
+        this.setupDropZone(this.meleeGrid, 'meleeSlot');
+        this.setupDropZone(this.armorGrid, 'armorSlot');
+        this.setupDropZone(this.helmetGrid, 'helmetSlot');
+        this.setupDropZone(this.hotbarGrid, 'hotbarSlot');
+        this.setupDropZone(this.backpackEquipGrid, 'backpackSlot');
+        this.setupDropZone(this.secureGrid, 'secureContainer');
+
+        if (this.secureSelect) {
+            this.secureSelect.addEventListener('change', (e) => {
+                const targetType = e.target.value;
+                const success = this.inv.setSecureContainer(targetType);
+                if (!success) {
+                    alert("解鎖失敗！金錢不足或需要任務解鎖。");
+                    // Revert select visually
+                    this.secureSelect.value = this.inv.secureContainerType;
+                } else {
+                    this.refreshInventory();
+                }
+            });
+        }
+
+        // Repair Modal Buttons
+        const repairCancel = document.getElementById('repair-cancel-btn');
+        if (repairCancel) {
+            repairCancel.onclick = () => {
+                document.getElementById('repair-modal').classList.add('hidden');
+            };
+        }
+
+        const repairConfirm = document.getElementById('repair-confirm-btn');
+        if (repairConfirm) {
+            repairConfirm.onclick = () => {
+                if (this.currentRepairParams) {
+                    this.game.executeRepair(this.currentRepairParams.kit, this.currentRepairParams.armor);
+                    document.getElementById('repair-modal').classList.add('hidden');
+                }
+            };
+        }
+    }
+
+    clearAttachment() {
+        if (this.attachedElement && this.attachedElement.parentNode) {
+            this.attachedElement.parentNode.removeChild(this.attachedElement);
+        }
+        if (this.dropPreviewElement && this.dropPreviewElement.parentNode) {
+            this.dropPreviewElement.parentNode.removeChild(this.dropPreviewElement);
+        }
+        this.attachedItemId = null;
+        this.attachedElement = null;
+        this.dropPreviewElement = null;
+    }
+
+    handleMouseMove(e) {
+        if (!e) return;
+        this.lastMouseE = e;
+
+        if (this.attachedItemId !== null && this.attachedElement) {
+            // Move item with mouse
+            this.attachedElement.style.left = (e.pageX - this.grabOffsetX) + 'px';
+            this.attachedElement.style.top = (e.pageY - this.grabOffsetY) + 'px';
+
+            // Handle Hover Preview
+            // Note: attachedElement and dropPreviewElement already have pointer-events: none
+            // so elementFromPoint will correctly ignore them without needing display toggling.
+            const elementUnder = document.elementFromPoint(e.clientX, e.clientY);
+
+            const gridContainer = elementUnder ? elementUnder.closest('.grid-container') : null;
+
+            if (gridContainer && gridContainer.id) {
+                // Map container DOM id to container name logic
+                let containerName = null;
+                if (gridContainer.id.includes('stash')) containerName = 'stash';
+                else if (gridContainer.id.includes('backpack-equip')) containerName = 'backpackSlot';
+                else if (gridContainer.id.includes('backpack')) containerName = 'backpack'; // strict!
+                else if (gridContainer.id === 'primary-grid') containerName = 'primaryWep';
+                else if (gridContainer.id === 'primary-grid-2') containerName = 'primaryWep2';
+                else if (gridContainer.id === 'secondary-grid') containerName = 'secondaryWep';
+                else if (gridContainer.id === 'melee-grid') containerName = 'meleeSlot';
+                else if (gridContainer.id.includes('armor')) containerName = 'armorSlot';
+                else if (gridContainer.id.includes('helmet')) containerName = 'helmetSlot';
+                else if (gridContainer.id.includes('hotbar')) containerName = 'hotbarSlot';
+                else if (gridContainer.id === 'secure-grid') containerName = 'secureContainer';
+
+                if (containerName) {
+                    const rect = gridContainer.getBoundingClientRect();
+                    // Cursor relative to the grid top-left
+                    let dropX = e.clientX - rect.left - this.grabOffsetX;
+                    let dropY = e.clientY - rect.top - this.grabOffsetY;
+
+                    let gridCoordX = Math.round(dropX / this.cellSize);
+                    let gridCoordY = Math.round(dropY / this.cellSize);
+
+                    const itemBase = this.inv.items.find(i => i.id === this.attachedItemId);
+                    const dbItem = ItemDatabase[itemBase.typeId];
+                    let w = this.dragRotated ? dbItem.gridH : dbItem.gridW;
+                    let h = this.dragRotated ? dbItem.gridW : dbItem.gridH;
+
+                    let canPlace = false;
+
+                    // Simple logic validation just for visual color
+                    let isValidTarget = true;
+                    if (containerName === 'primaryWep' || containerName === 'primaryWep2') {
+                        if (dbItem.type !== 'weapon') isValidTarget = false;
+                    } else if (containerName === 'secondaryWep') {
+                        if (dbItem.type !== 'weapon' || (dbItem.gridW * dbItem.gridH > 2)) isValidTarget = false;
+                    } else if (containerName === 'meleeSlot') {
+                        if (dbItem.type !== 'melee') isValidTarget = false;
+                    } else if (containerName === 'armorSlot') {
+                        if (dbItem.type !== 'armor') isValidTarget = false;
+                    } else if (containerName === 'helmetSlot') {
+                        if (dbItem.type !== 'helmet') isValidTarget = false;
+                    } else if (containerName === 'backpackSlot') {
+                        if (dbItem.type !== 'backpack') isValidTarget = false;
+                    }
+
+                    if (isValidTarget && this.inv.canPlaceItem(w, h, gridCoordX, gridCoordY, this.inv[containerName], this.attachedItemId)) {
+                        canPlace = true;
+                    }
+
+                    // Save the active valid drop target for mouseup
+                    this.currentHoverContainer = containerName;
+                    this.currentHoverGridX = gridCoordX;
+                    this.currentHoverGridY = gridCoordY;
+                    this.hoverValid = canPlace;
+
+                    // Render preview block within the grid container
+                    if (!this.dropPreviewElement) {
+                        this.dropPreviewElement = document.createElement('div');
+                        this.dropPreviewElement.style.position = 'absolute';
+                        this.dropPreviewElement.style.pointerEvents = 'none';
+                        this.dropPreviewElement.style.zIndex = '2999'; // Ensure above inventoryPanel (2000)
+                        document.body.appendChild(this.dropPreviewElement);
+                    }
+
+                    this.dropPreviewElement.style.left = (rect.left + window.scrollX + gridCoordX * this.cellSize) + 'px';
+                    this.dropPreviewElement.style.top = (rect.top + window.scrollY + gridCoordY * this.cellSize) + 'px';
+                    this.dropPreviewElement.style.width = (w * this.cellSize) + 'px';
+                    this.dropPreviewElement.style.height = (h * this.cellSize) + 'px';
+                    this.dropPreviewElement.style.backgroundColor = canPlace ? 'rgba(0, 255, 0, 0.4)' : 'rgba(255, 0, 0, 0.4)';
+                    this.dropPreviewElement.style.border = '2px solid ' + (canPlace ? 'lightgreen' : 'red');
+
+                } else {
+                    this.removePreview();
+                    this.currentHoverContainer = null;
+                }
+            } else {
+                this.removePreview();
+                this.currentHoverContainer = null;
+            }
+        }
+    }
+
+    removePreview() {
+        if (this.dropPreviewElement && this.dropPreviewElement.parentNode) {
+            this.dropPreviewElement.parentNode.removeChild(this.dropPreviewElement);
+            this.dropPreviewElement = null;
+        }
+    }
+
+    closeInRaidInventory() {
+        this.inventoryPanel.classList.add('hidden');
+        this.inventoryPanel.style.display = '';
+        this.inventoryPanel.style.position = '';
+        this.inventoryPanel.style.top = '';
+        this.inventoryPanel.style.left = '';
+        this.inventoryPanel.style.width = '';
+        this.inventoryPanel.style.height = '';
+        this.inventoryPanel.style.transform = '';
+        this.inventoryPanel.style.background = '';
+        this.inventoryPanel.style.justifyContent = '';
+        this.inventoryPanel.style.alignItems = '';
+        this.inventoryPanel.style.paddingTop = '';
+        this.inventoryPanel.style.zIndex = ''; // Reset z-index
+        document.getElementById('menu-content-area').appendChild(this.inventoryPanel);
+
+        const equipCol = document.getElementById('equip-column');
+        if (equipCol) this.inventoryPanel.insertBefore(equipCol, this.inventoryPanel.firstChild);
+        
+        const bpPanel = document.getElementById('backpack-panel');
+        if (bpPanel) equipCol.appendChild(bpPanel);
+
+        if (this.inRaidBgWrapper && this.inRaidBgWrapper.parentNode) {
+            this.inRaidBgWrapper.parentNode.removeChild(this.inRaidBgWrapper);
+        }
+
+        const stashParent = document.getElementById('stash-grid').closest('.left-panel') || document.getElementById('stash-grid').parentElement;
+        if (stashParent) stashParent.style.display = '';
+        
+        this.game.isInventoryOpen = false;
+    }
+
+    initUI() {
+        // First explicit UI load
+        this.refreshInventory();
+        this.refreshShop();
+    }
+
+    setupDropZone(element, containerName) {
+        // Drop logic is now handled globally centrally in mouseup
+    }
+
+    refreshShop() {
+        this.shopMoney.innerText = this.inv.player.money;
+        this.shopItems.innerHTML = '';
+        this.shopItems.style.display = 'flex';
+        this.shopItems.style.flexWrap = 'wrap';
+        this.shopItems.style.gap = '15px';
+
+        let categoriesContainer = document.getElementById('shop-categories');
+        if (!categoriesContainer) categoriesContainer = document.getElementById('overlay-shop-categories');
+
+        if (categoriesContainer) {
+            categoriesContainer.innerHTML = '';
+        }
+
+        const categories = {};
+        for (let catName in EconomyRules.shopCategories) {
+            categories[catName] = [];
+        }
+
+        if (!this.currentShopCategory || !(this.currentShopCategory in categories)) {
+            this.currentShopCategory = Object.keys(categories)[0];
+        }
+
+        for (let key in ItemDatabase) {
+            const item = ItemDatabase[key];
+            // Skip items that shouldn't be sold (price 0, or certain types)
+            if (!item.price || item.price <= 0) continue;
+            if (item.type === 'secure' && !item.price) continue;
+
+            for (let catName in EconomyRules.shopCategories) {
+                if (EconomyRules.shopCategories[catName](item)) {
+                    categories[catName].push({ key, item });
+                    break;
+                }
+            }
+        }
+
+        // Render Category Buttons
+        if (categoriesContainer) {
+            for (let catName in categories) {
+                const btn = document.createElement('button');
+                btn.innerText = catName;
+                btn.style.padding = '5px 10px';
+                btn.style.cursor = 'pointer';
+                btn.style.background = this.currentShopCategory === catName ? '#555' : '#333';
+                btn.style.color = '#fff';
+                btn.style.border = '1px solid #777';
+
+                btn.onclick = () => {
+                    this.currentShopCategory = catName;
+                    this.refreshShop();
+                };
+                categoriesContainer.appendChild(btn);
+            }
+        }
+
+        // Render only the active category
+        let activeCategoryItems = categories[this.currentShopCategory] || [];
+
+        // Sub-category filter bar (weapon classes OR ammo tiers)
+        const isWeaponTab = this.currentShopCategory === '武器';
+        const isAmmoTab = activeCategoryItems.length > 0 && activeCategoryItems[0].item.type === 'ammo';
+
+        if (isWeaponTab) {
+            const weaponClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.weaponClass || '其他'))];
+            if (!this.currentWeaponSubCat || !weaponClasses.includes(this.currentWeaponSubCat)) this.currentWeaponSubCat = '全部';
+
+            let subBar = document.getElementById('weapon-subcat-bar');
+            if (!subBar) {
+                subBar = document.createElement('div');
+                subBar.id = 'weapon-subcat-bar';
+                subBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding:8px; background:#1a1a1a; border-radius:6px; border:1px solid #444;';
+                this.shopItems.before(subBar);
+            }
+            subBar.innerHTML = '';
+            weaponClasses.forEach(cls => {
+                const sbtn = document.createElement('button');
+                sbtn.innerText = cls;
+                sbtn.style.cssText = `padding:4px 12px; cursor:pointer; border-radius:4px; border:1px solid #666;
+                    background:${this.currentWeaponSubCat === cls ? '#0066cc' : '#333'}; color:#fff; font-size:13px;`;
+                sbtn.onclick = () => { this.currentWeaponSubCat = cls; this.refreshShop(); };
+                subBar.appendChild(sbtn);
+            });
+            if (this.currentWeaponSubCat !== '全部') {
+                activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.weaponClass || '其他') === this.currentWeaponSubCat);
+            }
+        } else if (this.currentShopCategory === '子彈') {
+            // Caliber class buttons only - all tiers shown once caliber is selected
+            const ammoClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.ammoClass || '特殊'))];
+            if (!this.ammoClassSubCat || !ammoClasses.includes(this.ammoClassSubCat)) this.ammoClassSubCat = '全部';
+
+            let subBar = document.getElementById('weapon-subcat-bar');
+            if (!subBar) {
+                subBar = document.createElement('div');
+                subBar.id = 'weapon-subcat-bar';
+                this.shopItems.before(subBar);
+            }
+            subBar.innerHTML = '';
+            subBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding:8px; background:#1a1a1a; border-radius:6px; border:1px solid #444;';
+
+            const classColors = {
+                '小口徑': '#4a3a00', '中口徑': '#003a5a', '全威彈': '#3a1a5a',
+                '大口徑': '#5a1a00', '狙擊彈': '#1a4a1a', '散彈': '#5a3a00', '特殊': '#5a0000'
+            };
+            ammoClasses.forEach(cls => {
+                const sbtn = document.createElement('button');
+                sbtn.innerText = cls;
+                const active = this.ammoClassSubCat === cls;
+                sbtn.style.cssText = `padding:4px 14px; cursor:pointer; border-radius:4px; border:1px solid #888;
+                    background:${active ? (classColors[cls] || '#555') : '#333'}; color:#fff; font-size:13px;
+                    font-weight:${active ? 'bold' : 'normal'};
+                    ${active ? 'box-shadow:0 0 6px rgba(255,180,0,0.4); border-color:#fa0;' : ''}`;
+                sbtn.onclick = () => { this.ammoClassSubCat = cls; this.refreshShop(); };
+                subBar.appendChild(sbtn);
+            });
+
+            if (this.ammoClassSubCat !== '全部') {
+                activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.ammoClass || '特殊') === this.ammoClassSubCat);
+            }
+        } else {
+            const subBar = document.getElementById('weapon-subcat-bar');
+            if (subBar) subBar.remove();
+            this.currentWeaponSubCat = '全部';
+        }
+
+        activeCategoryItems.forEach(({ key, item }) => {
+                const div = document.createElement('div');
+                div.className = 'shop-item';
+                div.style.flex = '0 0 calc(25% - 15px)'; // 4 columns
+                div.style.boxSizing = 'border-box';
+                div.style.border = '1px solid #666';
+                div.style.padding = '10px';
+                div.style.backgroundColor = '#222';
+                div.style.display = 'flex';
+                div.style.flexDirection = 'column';
+                div.style.justifyContent = 'space-between';
+                div.dataset.typeid = key;
+
+                let action = () => {
+                    if (this.inv.buyItem(key)) {
+                        this.showPurchaseToast(item.name || key);
+                        this.refreshShop();
+                        if (this.attachedItemId === null) {
+                            this.refreshInventory();
+                        }
+                        this.game.updateHUD();
+                    }
+                };
+
+                let imgHtml = '';
+                // TODO: Revert Q-version images when assets are ready
+                /*
+                if (item.type === 'weapon') {
+                    const encodedName = encodeURIComponent(item.name || key);
+                    imgHtml = `<div style="flex: 1; display:flex; justify-content:center; align-items:center; overflow:hidden; margin-top:5px; position:relative; min-height:60px;">
+                        <img src="槍械圖片/${encodedName}.png" style="position:absolute; width: 100%; height: 100%; object-fit: fill; transform: scaleX(-1);" onerror="this.style.display='none'">
+                    </div>`;
+                }
+                */
+
+                div.innerHTML = `
+                    <div style="display:flex; flex-direction:column; align-items:flex-start;">
+                        <strong>${item.name}</strong>
+                        <span style="font-size: 12px; color: #aaa;">$${item.price} | ${item.weight}kg | ${item.gridW}x${item.gridH}</span>
+                        ${item.specialDesc ? `<span style="font-size: 11px; color: #f90; margin-top:2px;">${item.specialDesc}</span>` : ''}
+                    </div>
+                    ${imgHtml}
+                `;
+
+                const btnContainer = document.createElement('div');
+                btnContainer.style.display = 'flex';
+                btnContainer.style.gap = '5px';
+                btnContainer.style.marginTop = '10px';
+
+                const btn = document.createElement('button');
+                btn.className = 'shop-buy-btn';
+                btn.innerText = '購買 (' + item.price + ')';
+                btn.onclick = action;
+                btnContainer.appendChild(btn);
+
+                div.appendChild(btnContainer);
+
+                // Context menu removed, now handled by 'f' keydown over data-typeid
+
+                // If it's Gold_Armor, add repair option just for demo
+                if (key === '金甲' || key === 'Gold_Armor') {
+                    const repBtn = document.createElement('button');
+                    repBtn.className = 'shop-buy-btn';
+                    repBtn.style.background = '#aa5500';
+                    repBtn.innerText = '修復 (展示)';
+                    repBtn.onclick = () => {
+                        if (this.inv.player.money >= EconomyRules.repairCostGoldArmor) {
+                            this.inv.player.money -= EconomyRules.repairCostGoldArmor;
+                            this.refreshShop();
+                            alert("已修復裝甲 (展示用途)");
+                        }
+                    };
+                    div.appendChild(repBtn);
+                }
+
+                this.shopItems.appendChild(div);
+            });
+    }
+
+    refreshInventory() {
+        this.shopMoney.innerText = this.inv.player.money;
+        this.stashGrid.innerHTML = '';
+        this.backpackGrid.innerHTML = '';
+        this.primaryGrid.innerHTML = '';
+        this.primaryGrid2.innerHTML = '';
+        this.secondaryGrid.innerHTML = '';
+        this.meleeGrid.innerHTML = '';
+        this.armorGrid.innerHTML = '';
+        this.helmetGrid.innerHTML = '';
+        this.hotbarGrid.innerHTML = '';
+        this.backpackEquipGrid.innerHTML = '';
+        this.secureGrid.innerHTML = '';
+
+        // Dynamic Backpack Storage Scaling
+        const equippedBackpack = this.inv.items.find(i => i.container === 'backpackSlot');
+        const backpackSectionDom = this.backpackGrid.closest('.inventory-section') || this.backpackGrid.parentElement;
+
+        if (equippedBackpack) {
+            const bpData = ItemDatabase[equippedBackpack.typeId];
+            this.inv.backpack.w = bpData.capW;
+            this.inv.backpack.h = bpData.capH;
+            backpackSectionDom.style.display = 'block';
+            this.backpackGrid.style.width = (bpData.capW * this.cellSize) + 'px';
+            this.backpackGrid.style.height = (bpData.capH * this.cellSize) + 'px';
+        } else {
+            this.inv.backpack.w = 0;
+            this.inv.backpack.h = 0;
+            if (backpackSectionDom) backpackSectionDom.style.display = 'none';
+        }
+
+        // Update Secure Container Grid Visually
+        const secureData = ItemDatabase[this.inv.secureContainerType];
+        if (secureData) {
+            this.secureGrid.style.width = (secureData.capW * this.cellSize) + 'px';
+            this.secureGrid.style.height = (secureData.capH * this.cellSize) + 'px';
+            if (this.secureSelect) this.secureSelect.value = this.inv.secureContainerType;
+        }
+
+        // Keep equip slots at default CSS sizes (do not dynamically shrink)
+        this.primaryGrid.style.width = '250px'; this.primaryGrid.style.height = '100px';
+        this.primaryGrid2.style.width = '250px'; this.primaryGrid2.style.height = '100px';
+        this.secondaryGrid.style.width = '100px'; this.secondaryGrid.style.height = '100px';
+        this.meleeGrid.style.width = '50px'; this.meleeGrid.style.height = '100px';
+        this.armorGrid.style.width = '150px'; this.armorGrid.style.height = '150px';
+        this.helmetGrid.style.width = '100px'; this.helmetGrid.style.height = '100px';
+        this.hotbarGrid.style.width = '250px'; this.hotbarGrid.style.height = '50px';
+        this.backpackEquipGrid.style.width = '150px'; this.backpackEquipGrid.style.height = '150px';
+
+        this.inv.items.forEach(item => {
+            const dbItem = ItemDatabase[item.typeId];
+            const div = document.createElement('div');
+            div.className = 'inventory-item';
+            div.dataset.itemid = item.id;
+
+            let renderW = item.rotated ? dbItem.gridH : dbItem.gridW;
+            let renderH = item.rotated ? dbItem.gridW : dbItem.gridH;
+
+            div.style.width = (renderW * this.cellSize) + 'px';
+            div.style.height = (renderH * this.cellSize) + 'px';
+            div.style.left = (item.x * this.cellSize) + 'px';
+            div.style.top = (item.y * this.cellSize) + 'px';
+
+            let contentHtml = `<span>${item.typeId}</span>`;
+            if (dbItem.type === 'ammo') {
+                contentHtml = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; pointer-events:none;">
+                    <span style="font-size:12px;">${item.typeId}</span>
+                    <strong style="color:#0f0; font-size:14px;">${item.amount !== undefined ? item.amount : 0}</strong>
+                </div>`;
+            } else if (dbItem.type === 'armor' || dbItem.type === 'helmet') {
+                const maxDur = item.maxDurability || dbItem.maxDurability;
+                const isBroken = item.isBroken;
+                contentHtml = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; pointer-events:none; position:relative;">
+                    <span style="font-size:10px;">${item.typeId}</span>
+                    <div style="position:absolute; bottom:5px; padding:0 3px; background:rgba(0,0,0,0.7); border-radius:3px;">
+                        <span style="color:${isBroken ? '#ff4444' : '#0f0'}; font-size:12px;">${isBroken ? '已損壞' : item.durability.toFixed(1) + ' / ' + maxDur.toFixed(1)}</span>
+                    </div>
+                </div>`;
+            } else if (dbItem.type === 'repair') {
+                contentHtml = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; pointer-events:none; position:relative;">
+                    <span style="font-size:12px;">${item.typeId}</span>
+                    <div style="position:absolute; bottom:5px; padding:0 3px; background:rgba(0,0,0,0.7); border-radius:3px;">
+                        <span style="color:#aaf; font-size:12px;">${item.capacity !== undefined ? Math.ceil(item.capacity) : dbItem.maxCapacity}</span>
+                    </div>
+                </div>`;
+            } else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff') {
+                const cap = item.capacity !== undefined ? item.capacity : (dbItem.maxCapacity || 1);
+                const maxCap = dbItem.maxCapacity || 1;
+                const capPct = Math.max(0, Math.min(100, (cap / maxCap) * 100));
+                const capColor = capPct > 50 ? '#4fc' : capPct > 20 ? '#fa0' : '#f44';
+                contentHtml = `<div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:100%; pointer-events:none; position:relative;">
+                    <span style="font-size:10px; text-align:center; line-height:1.2;">${item.typeId}</span>
+                    <div style="position:absolute; bottom:3px; left:3px; right:3px; background:rgba(0,0,0,0.7); border-radius:2px; padding:0 2px; display:flex; justify-content:center;">
+                        <span style="color:${capColor}; font-size:11px; font-weight:bold;">${Math.ceil(cap)}/${maxCap}</span>
+                    </div>
+                </div>`;
+            } else if (dbItem.type === 'weapon') {
+                const encodedName = encodeURIComponent(dbItem.name || item.typeId);
+
+                let bw = dbItem.gridW * this.cellSize;
+                let bh = dbItem.gridH * this.cellSize;
+
+                // Only 2 rotation directions: normal or 90deg
+                let transformStr = "translate(-50%, -50%) scaleX(-1)";
+                if (item.rotated && item.container !== 'hotbarSlot') {
+                    transformStr = "translate(-50%, -50%) rotate(90deg) scaleX(-1)";
+                }
+                // Try .jpg first (M7.jpg), then .png, fallback to text
+                contentHtml = `<img src="槍械圖片/${encodedName}.jpg"
+                    alt="${item.typeId}"
+                    style="position:absolute; left:50%; top:50%; width:${bw}px; height:${bh}px; object-fit:fill; transform:${transformStr}; pointer-events:none;"
+                    onerror="this.src='槍械圖片/${encodedName}.png'; this.onerror=function(){this.style.display='none'; this.parentElement.querySelector('.item-text-fallback').style.display='inline';}">
+                    <span class="item-text-fallback" style="display:none;">${item.typeId}</span>`;
+            }
+            div.innerHTML = contentHtml;
+
+            if (item.rotated && item.container !== 'hotbarSlot') {
+                div.style.borderStyle = "dashed"; // Visual indicator
+            }
+
+            // Delete / Sell button
+            const delBtn = document.createElement('button');
+            delBtn.className = 'item-delete-btn';
+            delBtn.innerText = '$';
+            delBtn.title = "出售 (30%)";
+            delBtn.onclick = (e) => {
+                e.stopPropagation(); // Prevent pickup when selling
+                this.inv.sellItem(item.id);
+                this.refreshShop();
+                this.clearAttachment(); // drop it if held
+                this.refreshInventory();
+                this.game.updateHUD();
+            };
+            div.appendChild(delBtn);
+
+            // Right click to use medical items directly
+            div.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                const dbItemObj = ItemDatabase[item.typeId];
+                if (dbItemObj && (dbItemObj.type === 'medical' || dbItemObj.type === 'medical-buff')) {
+                    this.game.useItemDirectly(item);
+                }
+            });
+
+            // Click to Pickup
+            div.addEventListener('mousedown', (e) => {
+                // If clicking another item while holding one, don't pick it up directly, 
+                // wait for drop fail first, or swap them (let's stick to fail first for simplicity)
+                if (this.attachedItemId !== null || e.target.classList.contains('item-delete-btn')) return;
+
+                const rect = div.getBoundingClientRect();
+                this.grabOffsetX = e.clientX - rect.left;
+                this.grabOffsetY = e.clientY - rect.top;
+
+                this.attachedItemId = item.id;
+                this.attachedElement = div;
+                this.dragRotated = item.rotated;
+
+                // Move from grid layout DOM to document body for absolute positioning
+                document.body.appendChild(div);
+                div.style.position = 'absolute';
+                div.style.zIndex = '3000'; // Ensure above inventoryPanel (2000)
+                div.style.left = (e.pageX - this.grabOffsetX) + 'px';
+                div.style.top = (e.pageY - this.grabOffsetY) + 'px';
+                div.style.pointerEvents = 'none'; // So mouse moves over grids, not this block
+
+                // Immediately call mousemove to ensure preview draws if mouse doesn't move
+                this.handleMouseMove(e);
+            });
+
+            // Prevent attaching this specific element to grids if it is currently actively dragged
+            if (this.attachedItemId === item.id) return;
+
+            if (item.container === 'stash') {
+                this.stashGrid.appendChild(div);
+            } else if (item.container === 'backpack') {
+                this.backpackGrid.appendChild(div);
+            } else if (item.container === 'primaryWep') {
+                this.primaryGrid.appendChild(div);
+            } else if (item.container === 'primaryWep2') {
+                this.primaryGrid2.appendChild(div);
+            } else if (item.container === 'secondaryWep') {
+                this.secondaryGrid.appendChild(div);
+            } else if (item.container === 'meleeSlot') {
+                this.meleeGrid.appendChild(div);
+            } else if (item.container === 'armorSlot') {
+                this.armorGrid.appendChild(div);
+            } else if (item.container === 'helmetSlot') {
+                this.helmetGrid.appendChild(div);
+            } else if (item.container === 'hotbarSlot') {
+                this.hotbarGrid.appendChild(div);
+            } else if (item.container === 'backpackSlot') {
+                this.backpackEquipGrid.appendChild(div);
+            } else if (item.container === 'secureContainer') {
+                this.secureGrid.appendChild(div);
+            }
+        });
+    }
+
+    showPurchaseToast(itemName) {
+        // Show for 2 seconds, then remove
+        let existing = document.getElementById('purchase-toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'purchase-toast';
+        toast.innerText = `已購買 ${itemName}！`;
+        toast.style.cssText = `
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,200,80,0.92); color: white; font-size: 22px; font-weight: bold;
+            padding: 14px 32px; border-radius: 10px; z-index: 9999;
+            pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            animation: fadeOutToast 2s forwards;
+        `;
+        document.body.appendChild(toast);
+
+        // Inject animation if not present
+        if (!document.getElementById('toast-style')) {
+            const style = document.createElement('style');
+            style.id = 'toast-style';
+            style.textContent = `@keyframes fadeOutToast { 0%{opacity:1} 70%{opacity:1} 100%{opacity:0} }`;
+            document.head.appendChild(style);
+        }
+
+        setTimeout(() => { toast.remove(); }, 2000);
+    }
+
+    showItemStats(x, y, dbItem, itemInstance = null) {
+        if (!dbItem || !['weapon','armor','helmet','medical','medical-buff','repair','ammo'].includes(dbItem.type)) {
+            this.statsModal.classList.add('hidden');
+            return;
+        }
+
+        this.statsTitle.innerText = dbItem.name;
+        const s = dbItem.stats || {};
+
+        let content = '';
+
+        if (dbItem.type === 'weapon') {
+            const damage = s.damage !== undefined ? s.damage : '-';
+            let magInfo = '';
+            if (s.magSize) {
+                let currentMagCap = s.magSize;
+                if (itemInstance && itemInstance.hasUpgradedMag && s.upMagSize) currentMagCap = s.upMagSize;
+                let upgradeText = '';
+                if (itemInstance && itemInstance.hasUpgradedMag) {
+                    upgradeText = ` <span style='color:#0f0'>(擴容 ${s.upMagSize} 發)</span>`;
+                } else if (s.upMagSize) {
+                    upgradeText = ` <span style='color:#aaa'>→ 可升至 ${s.upMagSize} 發</span>`;
+                }
+                magInfo = `<div>彈匣容量: <span style="color:white">${currentMagCap} 發</span>${upgradeText}</div>`;
+            }
+            // Map ammoType to ammo category label
+            const ammoClassLabels = {
+                '小口徑':'小口徑 (SMG/手槍)', '中口徑':'中口徑 (AR/MG)',
+                '全威彈':'全威彈 (DMR/LMG)', '大口徑':'大口徑 (M250)',
+                '狙擊彈':'狙擊彈 (Sniper)', '散彈':'散彈 (Shotgun)',
+                '鈍傷彈':'鈍傷彈 (ASH-12)', '紅蛋':'紅蛋 (AWM)'
+            };
+            const ammoLabel = ammoClassLabels[dbItem.ammoType] || dbItem.ammoType || '-';
+            const tierRestriction = dbItem.maxAmmoTier ? `（最高 ${['','綠','藍','紫','金'][dbItem.maxAmmoTier] || dbItem.maxAmmoTier}彈）` : '';
+
+            content = `
+                <div>傷害: <span style="color:white">${damage}</span></div>
+                <div>射速: <span style="color:white">${s.fireRate ?? '-'}</span></div>
+                <div>破甲能力: <span style="color:${s.armorPen ? '#00ffff' : 'white'}">${s.armorPen ? s.armorPen.toFixed(1) + 'x' : '1.0x'}</span></div>
+                <div>換彈倍率: <span style="color:${(s.reloadMult||1) > 1 ? '#ff8800' : 'white'}">${s.reloadMult ? s.reloadMult.toFixed(1) + 'x' : '1.0x'}</span></div>
+                <div>後座控制: <span style="color:white">${s.recoil ?? '-'}</span></div>
+                <div>精準度: <span style="color:white">${s.accuracy ?? '-'}</span></div>
+                <div>範圍: <span style="color:white">${s.range ?? '-'}</span></div>
+                <div>子彈出速: <span style="color:white">${s.velocity ?? '-'}</span></div>
+                ${magInfo}
+                <div style="color:#fa0; margin-top:6px;">彈藥類型: <span style="color:white">${ammoLabel}</span>${tierRestriction}</div>
+                <hr style="border-color:#444; margin:8px 0;">
+                <div>重量: ${dbItem.weight} kg | 尺寸: ${dbItem.gridW}x${dbItem.gridH}</div>
+            `;
+        } else if (dbItem.type === 'armor' || dbItem.type === 'helmet') {
+            const maxDur = itemInstance ? (itemInstance.maxDurability || dbItem.maxDurability) : dbItem.maxDurability;
+            const durText = itemInstance ? `${itemInstance.durability.toFixed(1)} / ${maxDur.toFixed(1)}` : dbItem.maxDurability;
+            const brokenStatus = itemInstance && itemInstance.isBroken ? `<div style="color:#ff4444; font-weight:bold; margin-top:5px;">狀態：已磨損過度，無法修復</div>` : '';
+            content = `
+                <div>護甲等級: <span style="color:white">Lv ${dbItem.level}</span></div>
+                <div>傷害減免: <span style="color:white">${Math.round((dbItem.damageReduction || 0) * 100)}%</span></div>
+                <div>耐久度: <span style="color:white">${durText}</span></div>
+                ${itemInstance && itemInstance.originalMaxDurability ? `<div>原始上限: ${itemInstance.originalMaxDurability}</div>` : ''}
+                ${brokenStatus}
+                <hr style="border-color:#444; margin:8px 0;">
+                <div>重量: ${dbItem.weight} kg | 尺寸: ${dbItem.gridW}x${dbItem.gridH}</div>
+            `;
+        } else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff') {
+            const uses = itemInstance ? `剩餘 ${itemInstance.capacity ?? '-'} 次` : `最多 ${dbItem.maxCapacity ?? '-'} 次`;
+            content = `
+                <div>類型: <span style="color:white">${dbItem.healType || dbItem.effectType || '-'}</span></div>
+                <div>使用時間: <span style="color:white">${((dbItem.useTime || 0)/1000).toFixed(1)}s</span></div>
+                <div>${uses}</div>
+                <hr style="border-color:#444; margin:8px 0;">
+                <div>重量: ${dbItem.weight} kg | 尺寸: ${dbItem.gridW}x${dbItem.gridH}</div>
+            `;
+        } else if (dbItem.type === 'repair') {
+            content = `
+                <div>修理等級: <span style="color:white">Lv ${dbItem.level}</span></div>
+                <div>容量: <span style="color:white">${itemInstance ? (itemInstance.capacity ?? dbItem.maxCapacity) : dbItem.maxCapacity}</span></div>
+                <div>使用速率: <span style="color:white">${dbItem.useRate} 耐/次</span></div>
+                <hr style="border-color:#444; margin:8px 0;">
+                <div>重量: ${dbItem.weight} kg | 尺寸: ${dbItem.gridW}x${dbItem.gridH}</div>
+            `;
+        } else if (dbItem.type === 'ammo') {
+            const tierNames = ['','綠彈','藍彈','紫彈','金蛋'];
+            const mods = dbItem.armorDamageMods || {};
+            content = `
+                <div>彈藥分類: <span style="color:#fa0">${dbItem.ammoClass || '-'}</span></div>
+                <div>等級: <span style="color:white">${tierNames[dbItem.tier] || dbItem.tier || '-'}</span></div>
+                <div>穿甲等級: <span style="color:white">Lv ${dbItem.penLevel || 0} 以下護甲直接穿透</span></div>
+                <div style="margin-top:6px">護甲傷害倍率:</div>
+                ${[1,2,3,4].map(l=>`<div style="padding-left:8px">Lv${l}: <span style="color:white">x${mods[l] ?? '-'}</span></div>`).join('')}
+                ${dbItem.hpDamageMod !== undefined && dbItem.hpDamageMod !== 1.0 ? `<div>HP傷害倍率: <span style="color:#f90">x${dbItem.hpDamageMod}</span></div>` : ''}
+                ${dbItem.specialDesc ? `<div style="color:#f90; margin-top:4px">${dbItem.specialDesc}</div>` : ''}
+                <hr style="border-color:#444; margin:8px 0;">
+                <div>重量: ${dbItem.weight} kg | 數量: ${dbItem.maxCapacity}發/格</div>
+            `;
+        }
+
+        this.statsContent.innerHTML = content;
+
+        // Mag upgrade button (weapon only)
+        if (dbItem.type === 'weapon' && itemInstance && !itemInstance.hasUpgradedMag && s.upMagPrice && s.upMagSize) {
+            const magIncrease = s.upMagSize - s.magSize;
+            const priceDiff = s.upMagPrice - (dbItem.price || 0);
+            const upBtn = document.createElement('button');
+            upBtn.innerText = `升級彈匣 (+${magIncrease}發, 價差 $${priceDiff > 0 ? '+' + priceDiff : priceDiff})`;
+            upBtn.style.cssText = 'margin-top:8px; padding:5px; background:#0066cc; color:#fff; border:none; cursor:pointer; width:100%; border-radius:3px; font-weight:bold;';
+            upBtn.onclick = () => {
+                if (this.inv.player.money >= s.upMagPrice) {
+                    this.inv.player.money -= s.upMagPrice;
+                    itemInstance.hasUpgradedMag = true;
+                    itemInstance.currentMag = s.upMagSize;
+                    this.refreshShop();
+                    this.refreshInventory();
+                    this.game.updateHUD();
+                    this.showItemStats(x, y, dbItem, itemInstance);
+                } else { alert('金錢不足！'); }
+            };
+            this.statsContent.appendChild(upBtn);
+        }
+
+        // Buy Ammo shortcut (weapon only)
+        if (dbItem.type === 'weapon' && dbItem.ammoType) {
+            const buyAmmoBtn = document.createElement('button');
+            buyAmmoBtn.innerText = `購買彈藥 → ${dbItem.ammoType}`;
+            buyAmmoBtn.style.cssText = 'margin-top:6px; padding:5px; background:#664400; color:#fff; border:none; cursor:pointer; width:100%; border-radius:3px; font-weight:bold;';
+            buyAmmoBtn.onclick = () => {
+                this.statsModal.classList.add('hidden');
+                // Find the ammo tab name that matches this weapon's ammoType
+                const ammoTabName = Object.keys(EconomyRules.shopCategories).find(cat => {
+                    const testItem = { type: 'ammo', ammoClass: dbItem.ammoType };
+                    return EconomyRules.shopCategories[cat](testItem);
+                });
+                if (ammoTabName) {
+                    this.currentShopCategory = ammoTabName;
+                    // Switch to shop view if in stash view
+                    const shopBtn = document.getElementById('shop-tab-btn') || [...document.querySelectorAll('button')].find(b => b.innerText.includes('商店'));
+                    if (shopBtn) shopBtn.click();
+                    this.refreshShop();
+                }
+            };
+            this.statsContent.appendChild(buyAmmoBtn);
+        }
+
+        this.statsModal.style.left = (x + 15) + 'px';
+        this.statsModal.style.top = (y + 15) + 'px';
+        this.statsModal.classList.remove('hidden');
+    }
+
+    openRepairModal(kit, armor) {
+        this.currentRepairParams = { kit, armor };
+        const result = this.game.calculateRepair(kit, armor);
+        if (!result) return;
+
+        const modal = document.getElementById('repair-modal');
+        const info = document.getElementById('repair-info');
+        if (!modal || !info) return;
+
+        const kitName = ItemDatabase[kit.typeId].name;
+        const armorName = ItemDatabase[armor.typeId].name;
+        const ratePct = Math.round(result.decayRate * 100);
+
+        let content = `
+            <div><strong>修理箱：</strong> ${kitName}</div>
+            <div><strong>目標裝備：</strong> ${armorName}</div>
+            <hr style="border-color:#333; margin:10px 0;">
+            <div>當前耐久上限：${result.currentMax.toFixed(1)}</div>
+            <div>磨損倍率：<span style="color:#ff8800">${ratePct}%</span></div>
+            <div style="font-size:16px; margin-top:10px;">
+                修復後預計上限：<span style="color:#00ffaa; font-weight:bold;">${result.predictedMax.toFixed(1)} / ${result.predictedMax.toFixed(1)}</span>
+                <span style="color:#888; font-size:12px;"> (原 ${result.originalMax})</span>
+            </div>
+        `;
+
+        if (result.isBroken) {
+            content += `<div style="color:#ff4444; font-weight:bold; margin-top:10px; padding:10px; background:rgba(255,0,0,0.1); border-radius:5px;">
+                警告：修復後耐久上限將低於原始值的 20%，該裝備將損壞且無法再修復！
+            </div>`;
+        }
+
+        info.innerHTML = content;
+        modal.classList.remove('hidden');
+    }
+}

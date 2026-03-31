@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dual-Mode 2D Top-down Shooter</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <!-- Main Menu / Landing Page -->
+    <div id="main-menu">
+        <h1>Dual-Mode 2D Top-down Shooter</h1>
+
+        <div class="menu-tabs">
+            <button id="tab-stash" class="active">個人倉庫 (Stash)</button>
+            <button id="tab-shop">商店 (Shop)</button>
+        </div>
+
+        <!-- The inventory UI will be dynamically moved/re-used here -->
+        <div id="menu-content-area">
+            <div id="shop-panel" class="hidden">
+                <h2>商店 (Buy: 100%, Sell: 30%)</h2>
+                <div id="shop-money">錢: $<span id="money-text">0</span></div>
+                <div id="shop-categories"
+                    style="display: flex; gap: 10px; margin: 15px 0; border-bottom: 1px solid #555; padding-bottom: 10px;">
+                </div>
+                <div id="shop-items"></div>
+            </div>
+
+            <div id="inventory-panel"
+                style="display: flex; gap: 40px; align-items: flex-start; justify-content: flex-start; width: 100%; flex-wrap: nowrap; padding-right: 20px; overflow-x: auto;">
+
+                <!-- Left: Equipment -->
+                <div id="equip-column" style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
+                    <div class="inventory-section equip-panel"
+                        style="background: #1e1e1e; border: 1px solid #333; padding: 10px; width: max-content;">
+                        <h3
+                            style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #444; padding-bottom: 5px; color: #acc;">
+                            裝備價值: $ ...</h3>
+
+                        <!-- Weapons Area -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <!-- Primary Weapons Column -->
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="equip-slot-container">
+                                    <div class="slot-bg-text">主武器 1</div>
+                                    <div id="primary-grid" class="grid-container" style="width: 250px; height: 100px;">
+                                    </div>
+                                </div>
+                                <div class="equip-slot-container">
+                                    <div class="slot-bg-text">主武器 2</div>
+                                    <div id="primary-grid-2" class="grid-container"
+                                        style="width: 250px; height: 100px;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Secondary / Melee Column -->
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div class="equip-slot-container">
+                                    <div class="slot-bg-text">手槍</div>
+                                    <div id="secondary-grid" class="grid-container"
+                                        style="width: 100px; height: 100px;"></div>
+                                </div>
+                                <div class="equip-slot-container">
+                                    <div class="slot-bg-text">近戰</div>
+                                    <div id="melee-grid" class="grid-container" style="width: 50px; height: 100px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Body Area -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                            <div class="equip-slot-container">
+                                <div class="slot-bg-text">頭盔</div>
+                                <div id="helmet-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
+                            </div>
+                            <div class="equip-slot-container">
+                                <div class="slot-bg-text">護甲</div>
+                                <div id="armor-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
+                            </div>
+                            <!-- Added Backpack visually to the row to save space like rig in reference -->
+                            <div class="equip-slot-container">
+                                <div class="slot-bg-text">背包裝備</div>
+                                <div id="backpack-equip-grid" class="grid-container"
+                                    style="width: 100px; height: 150px;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Containers Area -->
+                        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                            <div class="equip-slot-container">
+                                <div class="slot-bg-text">口袋 / 快捷</div>
+                                <div id="hotbar-grid" class="grid-container" style="width: 250px; height: 50px;"></div>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 5px; margin-left: 20px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                    <span style="font-size: 14px; font-weight: bold; color: #acc;">保險箱</span>
+                                    <select id="secure-container-select"
+                                        style="background:#333; color:white; border:1px solid #555; padding:2px; font-size: 12px; outline: none;">
+                                        <option value="初始保險">初始 (2x2)</option>
+                                        <option value="中級保險">中級 (2x3) - $10,000解鎖</option>
+                                        <option value="高級保險">高級 (3x3) - 未解鎖</option>
+                                    </select>
+                                </div>
+                                <div class="equip-slot-container" style="align-self: flex-start;">
+                                    <div id="secure-grid" class="grid-container" style="width: 100px; height: 100px;">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 10px;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">背包內容</h3>
+                        <div id="backpack-grid" class="grid-container"></div>
+                    </div>
+                </div>
+
+                <!-- Right: Stash -->
+                <div class="inventory-section"
+                    style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
+                    <div
+                        style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
+                        <span style="font-weight: bold;">倉庫 (Stash)</span>
+                        <div style="display: flex; gap: 10px;">
+                            <button
+                                style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">整理</button>
+                            <button
+                                style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">轉移全部</button>
+                        </div>
+                    </div>
+                    <div id="stash-grid" class="grid-container"></div>
+                </div>
+
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
+            <select id="map-select"
+                style="background:#333; color:white; border:1px solid #555; padding:8px 12px; font-size:14px; border-radius:4px; outline:none; cursor:pointer;">
+                <option value="1">地圖 1 (預設)</option>
+                <option value="2">地圖 2</option>
+                <option value="3">地圖 3</option>
+            </select>
+            <button id="btn-enter-raid" class="play-btn" style="margin-top:0;">進入地圖 (Enter Raid)</button>
+        </div>
+    </div>
+
+    <!-- Gameplay Area (Hidden initially) -->
+    <div id="game-container" class="hidden">
+        <div id="hud" class="game-hud">
+            <!-- Top Left: Minimap & Mode/Timer -->
+            <div id="hud-top-left"
+                style="position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 10px; opacity: 0.8;">
+                <div style="background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 4px;">
+                    模式: <span id="mode-text">搜打撤</span> | <span id="extraction-timer" class="hidden">撤離倒數: <span
+                            id="timer-text">10.0</span>s</span>
+                </div>
+                <!-- 15 Minute Timer added -->
+                <div
+                    style="background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 18px; color: #acc;">
+                    時間: <span id="game-timer">15:00</span>
+                </div>
+                <div
+                    style="border: 2px solid #555; border-radius: 50%; overflow: hidden; width: 150px; height: 150px; background: #222;">
+                    <canvas id="minimap-canvas" width="150" height="150"></canvas>
+                </div>
+            </div>
+
+            <!-- Bottom Left: Health, Armor, Conditions -->
+            <div id="hud-bottom-left"
+                style="position: absolute; bottom: 20px; left: 10px; display: flex; flex-direction: column; gap: 5px; opacity: 0.9;">
+                <div style="display: flex; gap: 8px; align-items: flex-end; margin-bottom: 5px;">
+                    <!-- Helmet Durability Bar -->
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <span style="font-size: 10px; color: #aaa;">頭</span>
+                        <span id="helmet-dur-text" style="font-size: 9px; color: #00ccff;">-</span>
+                        <div style="width: 20px; height: 60px; background: #333; border: 1px solid #555; position: relative; overflow: hidden; border-radius: 2px;">
+                            <div id="helmet-fill"
+                                style="position:absolute; bottom:0; left:0; width:100%; height:0%; background: #00ccff; transition: height 0.3s;"></div>
+                            <div id="helmet-cross"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; z-index: 2; pointer-events: none;">
+                                <svg viewBox="0 0 100 100"
+                                    style="width: 100%; height: 100%; stroke: red; stroke-width: 15; stroke-linecap: round;">
+                                    <line x1="10" y1="10" x2="90" y2="90" />
+                                    <line x1="90" y1="10" x2="10" y2="90" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Armor Durability Bar -->
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+                        <span style="font-size: 10px; color: #aaa;">甲</span>
+                        <span id="armor-dur-text" style="font-size: 9px; color: #00ffaa;">-</span>
+                        <div style="width: 20px; height: 60px; background: #333; border: 1px solid #555; position: relative; overflow: hidden; border-radius: 2px;">
+                            <div id="armor-fill"
+                                style="position:absolute; bottom:0; left:0; width:100%; height:0%; background: #00ffaa; transition: height 0.3s;"></div>
+                            <div id="armor-cross"
+                                style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; z-index: 2; pointer-events: none;">
+                                <svg viewBox="0 0 100 100"
+                                    style="width: 100%; height: 100%; stroke: red; stroke-width: 15; stroke-linecap: round;">
+                                    <line x1="10" y1="10" x2="90" y2="90" />
+                                    <line x1="90" y1="10" x2="10" y2="90" />
+                                </svg>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(0,0,0,0.6); padding: 5px; border-radius: 4px; width: 200px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 14px;">
+                        <span>HP: <strong id="health-text">100</strong>%</span>
+                        <span id="health-conditions" style="font-size: 10px;">
+                            <span id="bleeding-indicator" class="hidden"
+                                style="color: red; font-weight: bold;">(出血)</span>
+                            <span id="heavy-bleeding-indicator" class="hidden"
+                                style="color: darkred; font-weight: bold;">(重度)</span>
+                            <span id="head-injury-indicator" class="hidden"
+                                style="color: orange; font-weight: bold;">(頭傷)</span>
+                            <span id="torso-injury-indicator" class="hidden"
+                                style="color: yellow; font-weight: bold;">(軀傷)</span>
+                            <span id="painkiller-indicator" class="hidden"
+                                style="color: lightblue; font-weight: bold;">(止痛)</span>
+                            <span id="healing-indicator" class="hidden"
+                                style="color: lime; font-weight: bold;">(治療)</span>
+                            <span id="adrenaline-indicator" class="hidden"
+                                style="color: #ff6600; font-weight: bold;">⚡腎上腺</span>
+                            <span id="strength-indicator" class="hidden"
+                                style="color: #cc44ff; font-weight: bold;">💪力量</span>
+                            <span id="weightless-indicator" class="hidden"
+                                style="color: #44ffcc; font-weight: bold;">🪶無重</span>
+                        </span>
+                    </div>
+                    <div
+                        style="width: 100%; height: 10px; background: #333; margin-top: 5px; border-radius: 5px; overflow: hidden;">
+                        <div id="health-bar-fill"
+                            style="width: 100%; height: 100%; background: #22cc22; transition: width 0.2s, background 0.2s;">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="font-size: 12px; background: rgba(0,0,0,0.6); padding: 3px; display: inline-block;">
+                    負重: <span id="weight-text">0</span> kg | 速度: <span id="speed-multiplier-text">1.05</span>x
+                </div>
+            </div>
+
+            <!-- Bottom Center: Hotbar Visuals (1 is primary, 2 is primary 2, etc? No, 5-9 is hotbar) -->
+            <div id="hud-bottom-center"
+                style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 5px; opacity: 0.9;">
+                <div class="hud-hotbar-slot"><span class="key-hint">5</span>
+                    <div id="hotbar-5" class="content"></div>
+                </div>
+                <div class="hud-hotbar-slot"><span class="key-hint">6</span>
+                    <div id="hotbar-6" class="content"></div>
+                </div>
+                <div class="hud-hotbar-slot"><span class="key-hint">7</span>
+                    <div id="hotbar-7" class="content"></div>
+                </div>
+                <div class="hud-hotbar-slot"><span class="key-hint">8</span>
+                    <div id="hotbar-8" class="content"></div>
+                </div>
+                <div class="hud-hotbar-slot"><span class="key-hint">9</span>
+                    <div id="hotbar-9" class="content"></div>
+                </div>
+            </div>
+
+            <!-- Bottom Right: Current Weapon & Ammo -->
+            <div id="hud-bottom-right"
+                style="position: absolute; bottom: 20px; right: 20px; text-align: right; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 4px; opacity: 0.9; min-width: 150px; display: flex; flex-direction: column; align-items: flex-end;">
+                <img id="current-weapon-img" src="" alt=""
+                    style="width: 150px; height: 60px; object-fit: contain; margin-bottom: 5px; display: none;">
+                <div id="current-weapon-name"
+                    style="font-size: 18px; font-weight: bold; color: #ffd700; margin-bottom: 5px;">-</div>
+                <div id="ammo-hud" style="font-size: 24px;">
+                    <span id="ammo-text">- / -</span>
+                </div>
+                <div id="reloading-indicator" class="hidden"
+                    style="color: cyan; font-weight: bold; font-size: 14px; margin-top: 5px;">(換彈中...)</div>
+            </div>
+
+            <!-- Action Progress Bar (Center Screen) -->
+            <div id="action-progress" class="hidden" style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 5px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #555; z-index: 500;">
+                <div id="action-text" style="color: white; font-size: 16px; font-weight: bold;">處理中... 0.0s</div>
+                <div style="width: 200px; height: 15px; background: #222; border-radius: 5px; overflow: hidden; position: relative;">
+                    <div id="action-bar-fill" style="width: 0%; height: 100%; background: #00ffaa; transition: width 0.1s linear;"></div>
+                </div>
+            </div>
+
+            <!-- Center Screen Text -->
+            <div id="game-over" class="hidden"
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center;">
+                已死亡，系統重置中...
+                <br>
+                <button id="btn-back-menu-fail" class="play-btn"
+                    style="margin-top: 20px; font-size: 20px;">返回主選單</button>
+            </div>
+            <div id="game-win" class="hidden"
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: lime; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center;">
+                成功撤離！
+                <br>
+                <button id="btn-back-menu-win" class="play-btn"
+                    style="margin-top: 20px; font-size: 20px;">返回主選單</button>
+            </div>
+        </div>
+
+        <!-- Inventory & Shop Overlay -->
+        <div id="ui-overlay" class="hidden">
+            <div id="shop-panel">
+                <h2>商店 (Buy: 100%, Sell: 30%)</h2>
+                <div id="shop-money">錢: $<span id="money-text">0</span></div>
+                <div id="overlay-shop-categories"
+                    style="display: flex; gap: 10px; margin: 15px 0; border-bottom: 1px solid #555; padding-bottom: 10px;">
+                </div>
+                <div id="shop-items"></div>
+            </div>
+
+            <div id="inventory-panel"
+                style="display: flex; gap: 40px; align-items: flex-start; justify-content: flex-start; width: 100%; flex-wrap: nowrap; padding-right: 20px; overflow-x: auto;">
+                <!-- Left: Equipment & Backpack -->
+                <div style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
+                    <div class="inventory-section">
+                        <h3>裝備 (Equipment)</h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
+                            <div>
+                                <h4>頭盔 (2x2)</h4>
+                                <div id="ui-helmet-grid" class="grid-container" style="width: 100px; height: 100px;">
+                                </div>
+                            </div>
+                            <!-- ... UI Overlay specific grids typically share IDs, but for simplicity we rely on ui.js which queries them. Actually, UI overlay uses the SAME #backpack-grid, but we can't duplicate IDs in HTML. Wait, they don't share IDs! Wait, there is only ONE set of grids in the file? No, index.html line 107 actually replicates #stash-grid and #backpack-grid. This is invalid HTML, but ui.js binds to the first one it finds. Let's fix the layout of the overlay to be consistent. -->
+                        </div>
+                    </div>
+
+                    <div class="inventory-section">
+                        <h3>背包內容 (Backpack)</h3>
+                        <div id="overlay-backpack-grid" class="grid-container"></div>
+                    </div>
+                    <button id="close-ui-btn" style="padding: 10px; cursor: pointer;">關閉 / 返回遊戲 (TAB)</button>
+                </div>
+
+                <!-- Right: Stash -->
+                <div class="inventory-section" style="flex: 0 0 auto;">
+                    <h3>倉庫 (Stash)</h3>
+                    <div id="overlay-stash-grid" class="grid-container"></div>
+                </div>
+            </div> <!-- End inventory-panel -->
+        </div> <!-- End ui-overlay -->
+
+        <div id="error-msg"></div>
+
+        <canvas id="game-canvas" width="800" height="600"></canvas>
+    </div> <!-- End game-container -->
+
+    <!-- Stats Context Menu Modal -->
+    <div id="item-stats-modal" class="hidden" style="
+        position: absolute; 
+        background: #111; 
+        border: 2px solid #555; 
+        padding: 15px; 
+        border-radius: 8px; 
+        z-index: 2000; 
+        color: #fff;
+        pointer-events: auto;
+        box-shadow: 0 0 15px rgba(0,0,0,0.8);
+        min-width: 150px;
+    ">
+        <div
+            style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:5px;">
+            <h4 id="stats-title" style="margin:0; color:#ffd700;">Weapon Name</h4>
+            <button id="stats-close-btn"
+                style="background:none; border:none; color:#aaa; font-size:18px; cursor:pointer; padding:0 4px; line-height:1;"
+                title="關閉">✕</button>
+        </div>
+        <div id="stats-content" style="font-size: 13px; line-height: 1.5; color: #ccc;">
+            <!-- Injected dynamically -->
+        </div>
+    </div>
+
+    <!-- Repair Modal -->
+    <div id="repair-modal" class="hidden" style="
+        position: absolute; 
+        background: #1a1a1a; 
+        border: 2px solid #00ffaa; 
+        padding: 20px; 
+        border-radius: 10px; 
+        z-index: 2500; 
+        color: #fff;
+        pointer-events: auto;
+        box-shadow: 0 0 25px rgba(0,255,170,0.3);
+        min-width: 300px;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    ">
+        <h3 style="margin:0 0 15px 0; color:#00ffaa; border-bottom:1px solid #333; padding-bottom:10px;">裝備修復</h3>
+        <div id="repair-info" style="font-size: 14px; line-height: 1.8; margin-bottom: 20px;">
+            <!-- Injected dynamically -->
+        </div>
+        <div style="display:flex; gap:10px; justify-content:flex-end;">
+            <button id="repair-cancel-btn" style="padding:8px 15px; background:#444; color:white; border:none; border-radius:4px; cursor:pointer;">取消</button>
+            <button id="repair-confirm-btn" style="padding:8px 15px; background:#00ffaa; color:#000; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">確認修復</button>
+        </div>
+    </div>
+
+    <script type="module" src="main.js?v=6.9"></script>
+</body>
+
+</html>

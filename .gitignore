@@ -1,0 +1,14 @@
+node_modules/
+.DS_Store
+.vercel/
+*.log
+.git/
+package-lock.json
+addEventListener_results.txt
+balance_results.txt
+balance_results_utf8.txt
+event_listeners.json
+test_balance.js
+test_loop.js
+test_loop2.js
+inject_stats.js
