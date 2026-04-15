@@ -1,6 +1,13 @@
 {
+  "name": "shooting-game-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.mjs",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs"
+  },
   "dependencies": {
-    "jsdom": "^28.1.0",
-    "puppeteer-core": "^24.38.0"
+    "ws": "^8.16.0"
   }
 }

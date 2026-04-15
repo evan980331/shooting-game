@@ -1,6 +1,7 @@
 import { InventorySystem } from './inventory.js?v=6.9';
 import { UIManager } from './ui.js?v=7.5';
 import { ItemDatabase } from './db.js?v=7.0';
+import { GameSimulation } from './game_simulation.js?v=1.0';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -71,74 +72,84 @@ class Game {
         this.ctx = null;
         this.device = null;
 
-        // Game State
-        this.player = {
-            x: 2000,
-            y: 2000,
-            size: 30, // radius/size
-            rotation: 0,
-            health: 100,
-            isBleeding: false,
-            isHeavyBleeding: false,
-            hasHeadInjury: false,
-            hasTorsoInjury: false,
-            pkActiveTime: 0,
-            isHealing: false,
-            isReloading: false,
-            reloadTimer: 0,
-            healOverRate: 0,
-            weight: 0,
-            baseSpeed: 200, // units per second
-            color: [0, 0.5, 1, 1], // Blue
-            isDead: false,
-            isExtracting: false,
-            extractionTimer: 10.0, // seconds
-            won: false,
-            visualJitter: 0, // Horizontal recoil jitter
-            recoilOffset: { x: 0, y: 0 }, // Spring-back recoil offset
-            cameraZoom: 1.5 // Added FOV multiplier (1.5x larger field of view)
-        };
-
-        this.input = {
-            w: false, a: false, s: false, d: false,
-            mouseX: 400, mouseY: 300, isShooting: false
-        };
-
-        this.walls = [
-            // Outer limits (4000x4000)
-            { x: 2000, y: -20, w: 4040, h: 40, color: [0.3, 0.3, 0.3, 1] },
-            { x: 2000, y: 4020, w: 4040, h: 40, color: [0.3, 0.3, 0.3, 1] },
-            { x: -20, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
-            { x: 4020, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
-            // Inner obstacles
-            { x: 1800, y: 1850, w: 300, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 1800, y: 2150, w: 300, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 2200, y: 2000, w: 40, h: 300, color: [0.5, 0.5, 0.5, 1] }
-        ];
-
-        this.extractionZones = [
-            { x: 2300, y: 1800, w: 200, h: 200, color: [0, 1, 0, 0.3] } // Green translucent
-        ];
+        this.sim = new GameSimulation();
+        this.localPlayerId = 'singleplayer'; // Fallback / Local mode
+        this.sim.addPlayer(this.localPlayerId);
+        
+        this.player = this.sim.state.players[this.localPlayerId];
+        this.input = this.player.input;
+        this.walls = this.sim.walls;
+        this.extractionZones = this.sim.extractionZones;
+        
+        Object.defineProperty(this, 'bullets', { get: () => this.sim.state.bullets });
+        Object.defineProperty(this, 'effects', { get: () => this.sim.state.effects });
+        Object.defineProperty(this, 'bots', { get: () => this.sim.state.bots });
 
         this.lastTime = performance.now();
-        this.renderInstances = []; // Collect items to draw
-
-        this.isInMenu = true;
-        this.currentMap = 1; // Default map is 1
+        this.renderInstances = [];
         this.cameraX = 0;
         this.cameraY = 0;
-        this.bullets = [];
-        this.effects = [];
-        this.shootTimer = 0;
 
-        // Setup inventory logic early so HUD can bind
-        this.inventory = new InventorySystem(this.player);
+        Object.defineProperty(this, 'isInMenu', { get: () => this.sim.isInMenu, set: (v) => this.sim.isInMenu = v });
+        Object.defineProperty(this, 'shootTimer', { get: () => this.player.shootTimer, set: (v) => this.player.shootTimer = v });
+        Object.defineProperty(this, 'gameTimer', { get: () => this.sim.gameTimer, set: (v) => this.sim.gameTimer = v });
 
-        // Match user requirement: 15 minutes timer -> 900 seconds
-        this.gameTimer = 900;
+        this.inventory = this.player.inventory;
+
+        this.isMultiplayer = false;
+        this.ws = null;
 
         this.bindEvents();
+        this.connectServer();
     }
+
+    connectServer() {
+        this.ws = new WebSocket('ws://localhost:8081');
+        this.ws.onopen = () => {
+            console.log('[Client] Connected to WebSocket Server');
+        };
+        this.ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'init') {
+                this.isMultiplayer = true;
+                this.sim.removePlayer(this.localPlayerId); // Remove singleplayer dummy
+                this.localPlayerId = msg.playerId;
+                this.sim.addPlayer(this.localPlayerId);
+                this.player = this.sim.state.players[this.localPlayerId];
+                this.inventory = this.player.inventory; // Re-bind
+                this.input = this.player.input;
+                if(this.ui) this.ui.player = this.player;
+                if(this.ui) this.ui.inventory = this.inventory;
+            } else if (msg.type === 'state') {
+                this.sim.importState(msg.data);
+                // Ensure inventory UI checks re-bind if raw data wiped instance
+                this.player = this.sim.state.players[this.localPlayerId];
+                if (this.sim.events.inventoryDirty && this.ui) {
+                    this.ui.refreshInventory();
+                    this.sim.events.inventoryDirty = false;
+                }
+            }
+        };
+        this.ws.onerror = (e) => {
+            console.warn('[Client] Server connection failed, falling back to local simulation.');
+        };
+        this.ws.onclose = () => {
+            console.log('[Client] Disconnected from server.');
+            this.isMultiplayer = false;
+        };
+    }
+
+    sendInput() {
+        if (!this.isMultiplayer || !this.ws || this.ws.readyState !== 1) return;
+        this.ws.send(JSON.stringify({
+            type: 'input',
+            playerId: this.localPlayerId,
+            move: { x: this.input.moveX, y: this.input.moveY },
+            shoot: this.input.isShooting,
+            angle: this.player.rotation
+        }));
+    }
+
 
     async init() {
         if (!navigator.gpu) {
@@ -387,757 +398,72 @@ class Game {
     }
 
     getSpeedMultiplier() {
-        let weightPenalty = this.player.weight * 0.01;
-        if (this.player.weightlessTimer > 0) weightPenalty = 0;
-
-        let mult = 1.0 - weightPenalty;
-        if (mult > 1.05) mult = 1.05; // clamp max naturally
-
-        if (this.player.hasTorsoInjury) mult -= 0.15; // 15% penalty
-        if (this.player.isHealing) mult *= 0.50; // 50% slow when healing
-        if (this.player.isRepairing) mult *= 0.50; // 50% slow when repairing
-        if (this.player.isGassed) mult *= 0.95; // 5% slow from gas
-
-        if (this.player.adrenalineTimer > 0) mult *= 1.10; // +10% speed
-
-        return Math.max(0.1, mult);
-    }
-
-    AABBIntersect(rect1, rect2) {
-        const r1L = rect1.x - rect1.w / 2;
-        const r1R = rect1.x + rect1.w / 2;
-        const r1T = rect1.y - rect1.h / 2;
-        const r1B = rect1.y + rect1.h / 2;
-
-        const r2L = rect2.x - rect2.w / 2;
-        const r2R = rect2.x + rect2.w / 2;
-        const r2T = rect2.y - rect2.h / 2;
-        const r2B = rect2.y + rect2.h / 2;
-
-        return !(r2L > r1R ||
-            r2R < r1L ||
-            r2T > r1B ||
-            r2B < r1T);
-    }
-
-    checkWallCollision(nx, ny, overrideW = null, overrideH = null) {
-        // Simple AABB collision with walls
-        const checkW = overrideW !== null ? overrideW : this.player.size;
-        const checkH = overrideH !== null ? overrideH : this.player.size;
-        const targetRect = { x: nx, y: ny, w: checkW, h: checkH };
-        for (let w of this.walls) {
-            if (this.AABBIntersect(targetRect, w)) return true;
-        }
-        return false;
+        return this.sim.getSpeedMultiplier();
     }
 
     update(dt) {
+        this.sim.input.canvasW = this.canvas.width * this.player.cameraZoom;
+        this.sim.input.canvasH = this.canvas.height * this.player.cameraZoom;
+        this.sim.update(dt, this.isInventoryOpen);
+        
+        // Process Simulation Events generated by GameSimulation
+        if (this.sim.events.playerDied) {
+            document.getElementById('game-over').classList.remove('hidden');
+            setTimeout(() => this.resetSession(), 3000);
+            this.sim.events.playerDied = false;
+        }
+        if (this.sim.events.playerWon) {
+            document.getElementById('game-win').classList.remove('hidden');
+            document.getElementById('extraction-timer').classList.add('hidden');
+            setTimeout(() => this.resetSession(), 5000);
+            this.sim.events.playerWon = false;
+        }
+        if (this.sim.events.sessionReset) {
+            document.getElementById('game-over').classList.add('hidden');
+            document.getElementById('game-win').classList.add('hidden');
+            document.getElementById('extraction-timer').classList.add('hidden');
+            const mainMenu = document.getElementById('main-menu');
+            const gameContainer = document.getElementById('game-container');
+            if (mainMenu) mainMenu.style.display = '';
+            if (gameContainer) gameContainer.style.display = 'none';
+            if (this.ui) this.ui.refreshInventory();
+            
+            // Reset camera
+            this.cameraX = this.player.x - this.canvas.width / 2;
+            this.cameraY = this.player.y - this.canvas.height / 2;
+            
+            this.sim.events.sessionReset = false;
+        }
+        if (this.sim.events.inventoryDirty) {
+            if (this.ui) this.ui.refreshInventory();
+            this.updateHUD();
+            this.sim.events.inventoryDirty = false;
+        }
+
         if (this.player.isDead || this.player.won || this.isInMenu) return;
 
-        if (!this.isInventoryOpen) {
-            this.shootTimer -= dt;
-            if (this.input.isShooting && this.shootTimer <= 0) {
-                if (this.player.isRepairing) {
-                    this.player.isRepairing = false;
-                    this.updateHUD();
-                }
-                this.shoot();
-            }
-        }
-        this.updateBullets(dt);
-        
-        // Update Bots
-        if (this.bots) {
-            for (let b of this.bots) {
-                if (b.health <= 0) continue;
-                b.shootTimer -= dt;
-                if (b.shootTimer <= 0 && b.weapon) {
-                    let s = b.weapon.stats;
-                    b.shootTimer = 10.0 / Math.max(1, s.fireRate);
-                    let bulletSpeed = Math.max(10, s.velocity) * 20;
-                    let effectiveRange = Math.max(10, s.range) * 20;
-                    
-                    let baseSpread = 0.43 * (1 - (s.accuracy / 100));
-                    let angleOffset = (Math.random() * 2 - 1) * baseSpread;
-                    let finalRot = b.rotation + angleOffset;
-                    
-                    this.bullets.push({
-                        x: b.x + Math.cos(b.rotation) * 25,
-                        y: b.y + Math.sin(b.rotation) * 25,
-                        rot: finalRot,
-                        speed: bulletSpeed,
-                        damage: s.damage || 0,
-                        maxRange: effectiveRange,
-                        distTravelled: 0,
-                        decayed: false,
-                        owner: 'bot'
-                    });
-                }
-            }
-        }
-
-        if (!this.isInventoryOpen) {
-            // Player rotation based on screen center (camera focuses on player)
-            // Use logical position + recoil offset for aim calculation
-            const dx = this.input.mouseX - (this.canvas.width / 2) - this.player.recoilOffset.x;
-            const dy = this.input.mouseY - (this.canvas.height / 2) - this.player.recoilOffset.y;
-            this.player.rotation = Math.atan2(dy, dx);
-
-            // Movement
-            const mult = this.getSpeedMultiplier();
-            const speed = this.player.baseSpeed * mult * dt;
-
-            let moveX = 0;
-            let moveY = 0;
-
-            if (this.input.w) moveY -= 1;
-            if (this.input.s) moveY += 1;
-            if (this.input.a) moveX -= 1;
-            if (this.input.d) moveX += 1;
-
-            if (moveX !== 0 || moveY !== 0) {
-                // Normalize for diagonal movement
-                const len = Math.sqrt(moveX * moveX + moveY * moveY);
-                moveX = (moveX / len) * speed;
-                moveY = (moveY / len) * speed;
-
-                // X-axis check
-                if (!this.checkWallCollision(this.player.x + moveX, this.player.y)) {
-                    this.player.x += moveX;
-                }
-                // Y-axis check
-                if (!this.checkWallCollision(this.player.x, this.player.y + moveY)) {
-                    this.player.y += moveY;
-                }
-            }
-        }
-
-        // Injury and Healing (Tick effects over time)
-        if (this.player.pkActiveTime > 0) this.player.pkActiveTime -= dt;
-        if (this.player.adrenalineTimer > 0) {
-            this.player.adrenalineTimer -= dt;
-            this.player.bleedCount = 0;
-            this.player.isBleeding = false;
-            this.player.isHeavyBleeding = false;
-        }
-        if (this.player.strengthTimer > 0) this.player.strengthTimer -= dt;
-        if (this.player.weightlessTimer > 0) this.player.weightlessTimer -= dt;
-
-        let shouldTakeTickDmg = this.player.pkActiveTime <= 0;
-
-        // Bleeding ticks (tick-based, not per-frame)
-        // bleedCount = 0 (none), 1 (one stack, tick every 2s), 2 (two stacks, tick every 1s)
-        // Normal bleed never kills (locks at 1 HP)
-        if (!this.player.bleedCount) this.player.bleedCount = 0;
-        const bleedCount = this.player.bleedCount;
-
-        if (bleedCount > 0 && !this.player.isHeavyBleeding && shouldTakeTickDmg) {
-            const bleedInterval = 2.0; // 永遠每 2 秒扣血
-            this.player.bleedTimer = (this.player.bleedTimer || 0) + dt;
-            if (this.player.bleedTimer >= bleedInterval) {
-                this.player.bleedTimer -= bleedInterval;
-                // 依據堆疊層數決定扣血量 (1層=1HP, 2層=2HP) 或者固定只扣1HP。這裡固定每2秒扣1HP來符合修復要求
-                let damage = bleedCount === 2 ? 2 : 1; 
-                if (this.player.health > 1) {
-                    this.player.health = Math.max(1, this.player.health - damage);
-                }
-            }
-        } else if (bleedCount === 0 && !this.player.isHeavyBleeding) {
-            this.player.bleedTimer = 0;
-        }
-
-        // Sync legacy isBleeding flag from bleedCount
-        this.player.isBleeding = bleedCount > 0;
-
-        // Heavy bleed ticks (can kill)
-        if (this.player.isHeavyBleeding && shouldTakeTickDmg) {
-            this.player.heavyBleedTimer = (this.player.heavyBleedTimer || 0) + dt;
-            if (this.player.heavyBleedTimer >= 1.0) {
-                this.player.heavyBleedTimer -= 1.0;
-                this.player.health -= 1;
-            }
-        } else if (!this.player.isHeavyBleeding) {
-            this.player.heavyBleedTimer = 0;
-        }
-
-        if (this.player.hasHeadInjury && shouldTakeTickDmg) this.player.health -= 0.5 * dt;   // ~1HP/2sec
-        if (this.player.hasTorsoInjury && shouldTakeTickDmg) this.player.health -= 1.0 * dt;   // ~1HP/sec
-
-        if (this.player.healOverRate > 0) {
-            this.player.health += this.player.healOverRate * dt;
-            if (this.player.health > 100) this.player.health = 100;
-            if (this.player.healOverTimer !== undefined && this.player.healOverTimer > 0) {
-                this.player.healOverTimer -= dt;
-                if (this.player.healOverTimer <= 0 || this.player.health >= 100) {
-                    this.player.healOverRate = 0;
-                    this.player.healOverTimer = 0;
-                    this.player.healOverName = '';
-                }
-            }
-        }
-
-        if (this.player.health <= 0) {
-            this.player.health = 0;
-            if (!this.player.isDead) this.die();
-        }
-
-        // Handle Active Throwables / Effects
-        this.player.isGassed = false;
-        for (let i = this.effects.length - 1; i >= 0; i--) {
-            let fx = this.effects[i];
-            if (!fx.active) {
-                fx.fuse -= dt;
-                if (fx.fuse <= 0) {
-                    fx.active = true;
-                    if (fx.type === 'frag') {
-                        let dist = Math.hypot(this.player.x - fx.x, this.player.y - fx.y);
-                        if (dist < fx.radius) {
-                            this.damagePlayer(fx.damage * 0.7, 'torso');
-                        }
-                        this.effects.splice(i, 1);
-                    }
-                }
-            } else {
-                fx.timer -= dt;
-                if (fx.type === 'gas') {
-                    let dist = Math.hypot(this.player.x - fx.x, this.player.y - fx.y);
-                    if (dist < fx.radius) {
-                        this.player.isGassed = true;
-                        this.player.health -= 2 * dt;
-                    }
-                }
-                if (fx.timer <= 0) {
-                    this.effects.splice(i, 1);
-                }
-            }
-        }
-
-        // Recoil & Jitter Decay (Recovery)
-        if (Math.abs(this.player.visualJitter) > 0.001) {
-            this.player.visualJitter *= Math.pow(0.0001, dt); // Very fast decay
-        } else {
-            this.player.visualJitter = 0;
-        }
-
-        // Recovery for position recoil (Spring back)
-        const recoveryFactor = Math.pow(0.000001, dt); // Extremely fast spring-back
-        this.player.recoilOffset.x *= recoveryFactor;
-        this.player.recoilOffset.y *= recoveryFactor;
-        if (Math.abs(this.player.recoilOffset.x) < 0.1) this.player.recoilOffset.x = 0;
-        if (Math.abs(this.player.recoilOffset.y) < 0.1) this.player.recoilOffset.y = 0;
-
-        // Global Game Timer (15 mins)
-        if (this.gameTimer > 0) {
-            this.gameTimer -= dt;
-            if (this.gameTimer <= 0) {
-                this.gameTimer = 0;
-                this.die(); // Die when time runs out
-            }
-        }
-
-        // Reload Logic processing
-        if (this.player.isReloading) {
-            this.player.reloadTimer -= dt;
-            let ri = document.getElementById('reloading-indicator');
-            if (ri) ri.innerText = "(換彈中... " + Math.max(0, this.player.reloadTimer).toFixed(1) + "s)";
-
-            if (this.player.reloadTimer <= 0) {
-                this.player.isReloading = false;
-                if (this.player.reloadTargetWeapon) {
-                    this.player.reloadTargetWeapon.currentMag += this.player.reloadAmount;
-                }
-                if (ri) ri.innerText = '(換彈中...)';
-                this.updateHUD();
-            }
-        }
-
-        // Repair Logic Processing
-        if (this.player.isRepairing) {
-            if (this.player.repairPrepTimer > 0) {
-                this.player.repairPrepTimer -= dt;
-            } else {
-                const dbKit = ItemDatabase[this.player.repairKit.typeId];
-                const dbArmor = ItemDatabase[this.player.repairTarget.typeId];
-                
-                if (dbKit && dbArmor) {
-                    let consumeAmt = this.player.repairUseRate * dt;
-                    consumeAmt = Math.min(consumeAmt, this.player.repairKit.capacity);
-                    
-                    let missingDur = this.player.repairTarget.maxDurability - this.player.repairTarget.durability;
-                    let requiredConsume = missingDur / this.player.repairEfficiency;
-                    consumeAmt = Math.min(consumeAmt, requiredConsume);
-                    
-                    if (consumeAmt > 0) {
-                        this.player.repairKit.capacity -= consumeAmt;
-                        this.player.repairTarget.durability += consumeAmt * this.player.repairEfficiency;
-                        if (this.ui) this.ui.refreshInventory();
-                    }
-                    
-                    if (this.player.repairKit.capacity <= 0 || this.player.repairTarget.durability >= this.player.repairTarget.maxDurability) {
-                        this.player.isRepairing = false;
-                        if (this.player.repairKit.capacity <= 0) {
-                            let idx = this.inventory.items.findIndex(i => i.id === this.player.repairKit.id);
-                            if (idx !== -1) {
-                                this.inventory.freeGrid(this.player.repairKit, this.inventory[this.player.repairKit.container]);
-                                this.inventory.items.splice(idx, 1);
-                            }
-                        }
-                        if (this.ui) this.ui.refreshInventory();
-                    }
-                } else {
-                    this.player.isRepairing = false;
-                }
-            }
-        }
-
-        // Healing Logic Processing
-        if (this.player.isHealing) {
-            this.player.healTimer -= dt;
-            if (this.player.healTimer <= 0) {
-                this.completeHealing();
-            }
-        }
-
-        // Extraction Zone Check
-        const playerRect = { x: this.player.x, y: this.player.y, w: this.player.size, h: this.player.size };
-        let inZone = false;
-        for (let z of this.extractionZones) {
-            if (this.AABBIntersect(playerRect, z)) {
-                inZone = true;
-                break;
-            }
-        }
-
-        if (inZone) {
-            this.player.isExtracting = true;
-            this.player.extractionTimer -= dt;
-            if (this.player.extractionTimer <= 0) {
-                this.win();
-            }
-        } else {
-            this.player.isExtracting = false;
-            this.player.extractionTimer = 10.0;
-        }
-
-        // Update Camera to follow player (center screen, including recoil bounce)
-        // Zoom-aware camera centering
+        // Visual Jitter/Recoil handling (syncing local state from sim state)
         const virtualWidth = this.canvas.width * this.player.cameraZoom;
         const virtualHeight = this.canvas.height * this.player.cameraZoom;
         this.cameraX = (this.player.x + this.player.recoilOffset.x) - virtualWidth / 2;
         this.cameraY = (this.player.y + this.player.recoilOffset.y) - virtualHeight / 2;
 
-        // Update Uniforms
         this.device.queue.writeBuffer(
             this.uniformBuffer, 0,
-            new Float32Array([this.canvas.width * this.player.cameraZoom, this.canvas.height * this.player.cameraZoom, this.cameraX, this.cameraY])
+            new Float32Array([virtualWidth, virtualHeight, this.cameraX, this.cameraY])
         );
 
         this.updateHUD();
     }
 
-    damagePlayer(amount, hitZone = 'torso', ammoId = null, armorPen = 1.0) {
-        if (this.player.isDead) return;
-
-        const dbAmmo = ammoId ? ItemDatabase[ammoId] : null;
-
-        // Apply conditions based on rules
-        if (hitZone === 'torso') {
-            let armorItem = this.inventory.items.find(i => i.container === 'armorSlot');
-            if (armorItem && armorItem.durability > 0) {
-                let dbArmor = ItemDatabase[armorItem.typeId];
-                let armorLevel = dbArmor.level || 1;
-                let penLevel = dbAmmo ? (dbAmmo.penLevel || 0) : 0;
-
-                if (penLevel >= armorLevel) {
-                    // Full penetration: armor barely takes damage, full HP damage passes through
-                    let mod = dbAmmo.armorDamageMods ? (dbAmmo.armorDamageMods[armorLevel] || 0) : 0;
-                    armorItem.durability -= amount * mod * armorPen;
-                    armorItem.durability = Math.max(0, armorItem.durability);
-                } else {
-                    // Normal block logic scaled by armor damage mod
-                    let mod = dbAmmo ? (dbAmmo.armorDamageMods ? (dbAmmo.armorDamageMods[armorLevel] || 1.0) : 1.0) : 1.0;
-                    let blockAmount = amount * (dbArmor.damageReduction || 0);
-                    let armorDmg = blockAmount * mod * armorPen;
-                    if (armorDmg > armorItem.durability) armorDmg = armorItem.durability;
-                    armorItem.durability -= armorDmg;
-                    amount -= armorDmg; // HP damage reduced by armor block
-                    armorItem.durability = Math.max(0, armorItem.durability);
-                }
-                if (this.ui) this.ui.refreshInventory();
-            } else if (!this.player.hasTorsoInjury && amount > 15) {
-                this.player.hasTorsoInjury = true;
-            }
-        } else if (hitZone === 'head') {
-            let helmetItem = this.inventory.items.find(i => i.container === 'helmetSlot');
-            if (helmetItem && helmetItem.durability > 0) {
-                let dbHelmet = ItemDatabase[helmetItem.typeId];
-                let armorLevel = dbHelmet.level || 1;
-                let penLevel = dbAmmo ? (dbAmmo.penLevel || 0) : 0;
-
-                const weaponAP = dbItem.stats.armorPen || 1.0;
-                if (penLevel >= armorLevel) {
-                    let mod = dbAmmo.armorDamageMods ? (dbAmmo.armorDamageMods[armorLevel] || 0) : 0;
-                    helmetItem.durability -= amount * mod * weaponAP;
-                    helmetItem.durability = Math.max(0, helmetItem.durability);
-                } else {
-                    let mod = dbAmmo ? (dbAmmo.armorDamageMods ? (dbAmmo.armorDamageMods[armorLevel] || 1.0) : 1.0) : 1.0;
-                    let blockAmount = amount * (dbHelmet.damageReduction || 0);
-                    let armorDmg = blockAmount * mod * weaponAP;
-                    if (armorDmg > helmetItem.durability) armorDmg = helmetItem.durability;
-                    helmetItem.durability -= armorDmg;
-                    amount -= armorDmg;
-                    helmetItem.durability = Math.max(0, helmetItem.durability);
-                }
-                if (this.ui) this.ui.refreshInventory();
-            } else if (!this.player.hasHeadInjury && amount > 5) {
-                this.player.hasHeadInjury = true;
-            }
-        }
-
-        // Apply hp damage multiplier from ammo (e.g. 鈍傷彈 = 0.6x HP damage)
-        if (dbAmmo && dbAmmo.hpDamageMod !== undefined) {
-            amount *= dbAmmo.hpDamageMod;
-        }
-
-        // Special ammo effects
-        if (dbAmmo && dbAmmo.forceTorsoInjury && !this.player.hasTorsoInjury) {
-            this.player.hasTorsoInjury = true;
-        }
-
-        this.player.health -= amount;
-
-        if (amount > 40 && !this.player.isHeavyBleeding) {
-            this.player.isHeavyBleeding = true;
-            this.player.bleedCount = 0; // heavy bleed overrides normal
-        } else if (amount > 15) {
-            // Stack normal bleeding up to 2 layers
-            if (!this.player.isHeavyBleeding) {
-                this.player.bleedCount = Math.min(2, (this.player.bleedCount || 0) + 1);
-            }
-        }
-
-        if (this.player.health <= 0) {
-            this.player.health = 0;
-            this.die();
-        }
-    }
-
-    die() {
-        this.player.isDead = true;
-        this.player.health = 0;
-        document.getElementById('game-over').classList.remove('hidden');
-
-        // Clear inventory except stash and secure container
-        this.inventory.clearOnDeath();
-        this.ui.refreshInventory();
-        this.updateHUD(); // Weight will be updated
-
-        // Reset session logic after 3 seconds
-        setTimeout(() => {
-            this.resetSession();
-        }, 3000);
-    }
-
-    win() {
-        this.player.won = true;
-        document.getElementById('game-win').classList.remove('hidden');
-        document.getElementById('extraction-timer').classList.add('hidden');
-
-        // Return to start after 5 seconds
-        setTimeout(() => {
-            this.resetSession();
-        }, 5000);
-    }
-
     resetSession() {
-        this.player.x = 2000;
-        this.player.y = 2000;
-        this.player.health = 100;
-        this.player.weight = 0;
-        this.player.isDead = false;
-        this.player.won = false;
-
-        this.player.isBleeding = false;
-        this.player.isHeavyBleeding = false;
-        this.player.hasHeadInjury = false;
-        this.player.hasTorsoInjury = false;
-        this.player.pkActiveTime = 0;
-        this.player.isHealing = false;
-        this.player.isReloading = false;
-        this.player.reloadTimer = 0;
-        this.player.adrenalineTimer = 0;
-        this.player.strengthTimer = 0;
-        this.player.weightlessTimer = 0;
-        this.player.isGassed = false;
-        this.player.healOverRate = 0;
-        this.effects = [];
-
-        this.gameTimer = 900; // Reset to 15 mins
-        this.player.isExtracting = false;
-        this.player.extractionTimer = 10.0;
-        
-        // Reset camera instantly so next uniform buffer write is correct if needed
-        this.cameraX = this.player.x - this.canvas.width / 2;
-        this.cameraY = this.player.y - this.canvas.height / 2;
-
-        document.getElementById('game-over').classList.add('hidden');
-        document.getElementById('game-win').classList.add('hidden');
-        document.getElementById('extraction-timer').classList.add('hidden');
-
-        // Return to lobby: show main-menu, hide game canvas
-        const mainMenu = document.getElementById('main-menu');
-        const gameContainer = document.getElementById('game-container');
-        if (mainMenu) mainMenu.style.display = '';
-        if (gameContainer) gameContainer.style.display = 'none';
-        this.isInMenu = true;
-
-        // Also refresh UI to sync stash state
-        if (this.ui) {
-            this.ui.refreshInventory();
+        this.sim.resetSession(); if(this.isMultiplayer) {
+            // Tell server to reset? For now just UI
         }
     }
 
     spawnTestBot() {
-        this.bots = [{
-            x: this.player.x - 200,
-            y: this.player.y,
-            size: this.player.size,
-            rotation: Math.PI,
-            health: 100, // Realistic human HP
-            maxHealth: 100,
-            armorLevel: 4, // Upgraded to Gold Armor for testing
-            helmetLevel: 4, // Upgraded to Gold Helmet
-            armorType: "金甲",
-            armorDurability: 50,
-            armorMaxDurability: 50,
-            weapon: ItemDatabase["M7"],
-            shootTimer: 0,
-            color: [1, 0.2, 0.2, 1]
-        }];
-        console.log('[Test Bot] Spawned with '+this.bots[0].health+' HP, Lv4 Gold Armor/Helmet (AP testing enabled)');
-    }
-
-    shoot() {
-        let activeItem = this.inventory.items.find(i => i.container === this.player.activeWeaponSlot);
-        if (!activeItem) return;
-        if (this.player.isReloading) return;
-
-        const weaponDef = ItemDatabase[activeItem.typeId];
-        if (!weaponDef) return;
-
-        if (weaponDef.type === 'melee') {
-            // Melee Attack Logic
-            this.shootTimer = 10.0 / Math.max(1, weaponDef.stats.fireRate);
-            // Range check
-            let rangeSq = Math.pow(Math.max(2, weaponDef.stats.range) * 20, 2);
-            for (let i = this.effects.length - 1; i >= 0; i--) {
-                // Optional: implement breaking boxes/effects with melee. 
-            }
-            // For now, melee doesn't do much in PvE without enemies yet, but let's log it
-            console.log("Swung Melee!", weaponDef.name, "Damage:", weaponDef.stats.damage);
-            return;
-        }
-
-        if (weaponDef.type !== 'weapon' || !weaponDef.stats) return;
-
-        // Check Ammo
-        if (activeItem.currentMag !== undefined) {
-            if (activeItem.currentMag <= 0) return; // Out of ammo, need reload
-            activeItem.currentMag--; // Consume 1 ammo per trigger pull
-        }
-
-        const s = weaponDef.stats;
-
-        // Fire Rate: interval = (10000 / fireRate) / 1000 seconds
-        let fr = Math.max(1, s.fireRate);
-        this.shootTimer = 10.0 / fr; // 10000/fr ms -> 10.0/fr sec
-
-        // Parse damage for shotguns (e.g. "10x8")
-        let dmgAmount = 10;
-        let pelletCount = 1;
-        if (typeof s.damage === 'string' && s.damage.includes('x')) {
-            const parts = s.damage.split('x');
-            dmgAmount = parseFloat(parts[0]) || 0;
-            pelletCount = parseInt(parts[1]) || 1;
-        } else {
-            dmgAmount = parseFloat(s.damage) || 0;
-        }
-
-        // Calculate consecutive shots for spread logic
-        if (!this.player.consecutiveShots) this.player.consecutiveShots = 0;
-        if (!this.player.lastShotTime) this.player.lastShotTime = 0;
-        
-        let now = performance.now();
-        let frInterval = 10000 / fr; // max time between shots to be considered "continuous"
-        
-        // If time since last shot exceeds the fire rate interval + 100ms tolerance, reset streak
-        if (now - this.player.lastShotTime > frInterval + 100) {
-            this.player.consecutiveShots = 0;
-        }
-        this.player.consecutiveShots++;
-        this.player.lastShotTime = now;
-
-        // Spawn Bullets
-        for (let p = 0; p < pelletCount; p++) {
-            let maxSpreadRad = 0.33; // ~19 deg deviation max
-            if (pelletCount > 1) maxSpreadRad = 0.5; // Shotguns
-
-            let baseSpread = maxSpreadRad * (1 - (s.accuracy / 100));
-
-            // First 3 shots no spread, ramps up after
-            let currentSpread = 0;
-            if (pelletCount > 1) {
-                currentSpread = baseSpread; // shotguns always full spread
-            } else if (this.player.consecutiveShots > 3) {
-                let extra = this.player.consecutiveShots - 3;
-                let spreadMult = Math.min(1.0, extra / 7.0);
-                currentSpread = baseSpread * spreadMult;
-            }
-
-            let jitterMagnitude = (1 - (s.recoil / 100)) * 0.10; // Reduced from 0.15 to 0.10 for 1.5x FOV
-            if (this.player.strengthTimer > 0) jitterMagnitude *= 0.5; // Strength reduces jitter
-            
-            let horizontalJitter = (Math.random() * 2 - 1) * jitterMagnitude;
-            
-            // Trajectory Logic: First 3 shots perfectly accurate (no jitter on bullet)
-            let bulletJitter = (this.player.consecutiveShots > 3) ? horizontalJitter : 0;
-
-            let spreadRand = (Math.random() * 2 - 1);
-            if (pelletCount > 1) {
-                // Triangular distribution for shotguns: middle is most dense
-                spreadRand = (Math.random() + Math.random() - 1);
-            }
-            let angleOffset = spreadRand * currentSpread + bulletJitter;
-            let finalRot = this.player.rotation + angleOffset;
-
-            let bulletSpeed = Math.max(10, s.velocity) * 20;
-            let effectiveRange = Math.max(10, s.range) * 20;
-
-            this.bullets.push({
-                x: (this.player.x + this.player.recoilOffset.x) + Math.cos(this.player.rotation) * 25,
-                y: (this.player.y + this.player.recoilOffset.y) + Math.sin(this.player.rotation) * 25,
-                rot: finalRot,
-                speed: bulletSpeed,
-                damage: dmgAmount,
-                maxRange: effectiveRange,
-                distTravelled: 0,
-                decayed: false,
-                armorPen: s.armorPen || 1.0,
-                ammoId: activeItem.loadedAmmoId || null
-            });
-            
-            // Store horizontal jitter for visual feedback (use latest pellet's jitter)
-            if (p === pelletCount - 1) {
-                this.player.visualJitter = horizontalJitter * 0.8;
-            }
-        }
-
-        // Apply recoil push AFTER bullets are spawned
-        // Use recoilOffset for temporary "bounce" that springs back
-        let recoilBonus = (this.player.strengthTimer > 0) ? 10 : 0;
-        let finalRecoil = Math.max(0, s.recoil - recoilBonus);
-        let kickbackForce = (1 - (finalRecoil / 100)) * 450;
-        let kickX = -Math.cos(this.player.rotation) * kickbackForce * 0.016;
-        let kickY = -Math.sin(this.player.rotation) * kickbackForce * 0.016;
-
-        if (!this.checkWallCollision(this.player.x + this.player.recoilOffset.x + kickX, this.player.y + this.player.recoilOffset.y)) {
-            this.player.recoilOffset.x += kickX;
-        }
-        if (!this.checkWallCollision(this.player.x + this.player.recoilOffset.x, this.player.y + this.player.recoilOffset.y + kickY)) {
-            this.player.recoilOffset.y += kickY;
-        }
-    }
-
-    updateBullets(dt) {
-        for (let i = this.bullets.length - 1; i >= 0; i--) {
-            let b = this.bullets[i];
-
-            let moveX = Math.cos(b.rot) * b.speed * dt;
-            let moveY = Math.sin(b.rot) * b.speed * dt;
-
-            b.x += moveX;
-            b.y += moveY;
-            b.distTravelled += Math.sqrt(moveX * moveX + moveY * moveY);
-
-            if (!b.decayed && b.distTravelled > b.maxRange) {
-                b.damage *= 0.5;
-                b.decayed = true;
-            }
-
-            if (b.owner === 'bot' && !this.player.isDead) {
-                let dist = Math.hypot(this.player.x - b.x, this.player.y - b.y);
-                if (dist < (this.player.size / 2) + 5) {
-                    let isHead = dist < (this.player.size / 4);
-                    this.damagePlayer(b.damage, isHead ? 'head' : 'torso', b.ammoId || null, b.armorPen || 1.0);
-                    this.bullets.splice(i, 1);
-                    continue;
-                }
-            } else if (b.owner !== 'bot' && this.bots) {
-                let hitBot = false;
-                for (let bot of this.bots) {
-                    if (bot.health <= 0) continue;
-                    let dist = Math.hypot(bot.x - b.x, bot.y - b.y);
-                    if (dist < (bot.size / 2) + 5) {
-                        let isHead = dist < (bot.size / 4);
-                        
-                        // Ammo Logic against Bot Armor
-                        let damage = b.damage;
-                        let targetArmorLevel = isHead ? (bot.helmetLevel || 0) : (bot.armorLevel || 0);
-                        let ammoDb = b.ammoId ? ItemDatabase[b.ammoId] : null;
-
-                        if (ammoDb && targetArmorLevel > 0 && bot.armorDurability > 0) {
-                            let pen = ammoDb.penLevel || 0;
-                            const apMult = b.armorPen || 1.0;
-
-                            // Calculate durability damage to bot armor
-                            let armorMod = ammoDb.armorDamageMods ? (ammoDb.armorDamageMods[targetArmorLevel] || 1.0) : 1.0;
-                            let durDmg = damage * armorMod * apMult;
-                            bot.armorDurability -= durDmg;
-                            if (bot.armorDurability < 0) bot.armorDurability = 0;
-
-                            if (pen < targetArmorLevel) {
-                                // Mitigated
-                                let reduction = 0;
-                                if (targetArmorLevel === 1) reduction = 0.1;
-                                else if (targetArmorLevel === 2) reduction = 0.2;
-                                else if (targetArmorLevel === 3) reduction = 0.35;
-                                else if (targetArmorLevel === 4) reduction = 0.5;
-                                damage *= (1 - reduction);
-                            }
-                            if (ammoDb.hpDamageMod !== undefined) {
-                                damage *= ammoDb.hpDamageMod;
-                            }
-                        } else if (targetArmorLevel > 0 && bot.armorDurability <= 0) {
-                            console.log(`[Combat Log] ! Bot Armor BROKEN ! Full damage dealt.`);
-                        }
-
-                        bot.health -= damage;
-                        console.log(`[Combat Log] - Hit ${isHead ? 'Head' : 'Torso'}! BaseDmg: ${b.damage.toFixed(1)}, FinalDmg: ${damage.toFixed(1)} vs Lv${targetArmorLevel} Armor. Bot HP: ${Math.max(0, bot.health).toFixed(1)}/100`);
-
-                        if (bot.health <= 0) {
-                            console.log(`[Combat Log] !!! BOT KILLED !!!`);
-                        }
-
-                        hitBot = true;
-                        break;
-                    }
-                }
-                if (hitBot) {
-                    this.bullets.splice(i, 1);
-                    continue;
-                }
-            }
-
-            if (this.checkWallCollision(b.x, b.y, 10, 4)) {
-                this.bullets.splice(i, 1);
-                continue;
-            }
-
-            if (b.distTravelled > b.maxRange * 1.2) {
-                this.bullets.splice(i, 1);
-                continue;
-            }
-        }
+        this.sim.spawnTestBot(); // Bot spawn command
     }
 
     updateHUD() {

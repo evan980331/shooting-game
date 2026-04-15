@@ -1,5 +1,5 @@
 # 自製射擊遊戲 - 遊戲設定與數據總表
-(最後更新日期：2026/03/31)
+(最後更新日期：2026/04/15)
 
 ## 目錄
 1. [核心機制](#核心機制)
@@ -348,8 +348,21 @@
 - **Vercel 自動部署**：整合 Vercel 雲端平台，實現網頁版即時預覽與分享。
 - **規範建立**：確立「每次開發結束或更新文件後自動執行 Git Push」的開發流程，確保雲端代碼永遠與本地同步。
 
+### 2026/04/15 - 伺服器權威架構與多人連線 (Multiplayer) 基礎
+- **GameSimulation 核心解耦與純粹化**：
+  - 將所有 DOM/WebGL 依賴抽離，建立完全獨立於客戶端的模擬層 (`GameSimulation`)。
+  - 狀態樹重構為單一 `state` 物件 (`{ players, bullets, bots, effects, time }`)，準備應對全域伺服器同步。
+  - 實作確定性隨機數生成器 (`MathUtils.seededRandom`)，取代原生 `Math.random`，確保伺服器與不同客戶端運算物理結果 100% 一致。
+- **WebSocket 伺服器建置**：
+  - 建立 Node.js `server.mjs`，實作了基於 60 Tickrate（約 16.6ms）的固定時間步長循環。
+  - 定義 Client-to-Server 的輸入封包 (Input Protocol)，包含滑鼠打擊與移動向量。
+  - 定義 Server-to-Client 的狀態廣播 (State Protocol)，使客戶端完全受伺服器權威控制。
+- **無縫降級 (Fallback) 雙軌模式**：
+  - 客戶端啟動時將嘗試連線至 `ws://localhost:8081`。
+  - 若伺服器不在線，客戶端將無感退回單機模式 (Local Simulation)，維持原有流暢的單人遊戲體驗而不報錯。
+
 ---
 
 ## 專案連結
 - **GitHub 儲存庫**：[https://github.com/evan980331/shooting-game](https://github.com/evan980331/shooting-game)
-- **Vercel 預覽網址**：*(請手動部署後填寫於此)*
+- **Vercel 預覽網址**：[https://shooting-game-2d.vercel.app]
