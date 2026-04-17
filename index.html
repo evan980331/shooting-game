@@ -5,148 +5,165 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dual-Mode 2D Top-down Shooter</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=8.3">
 </head>
 
 <body>
     <!-- Main Menu / Landing Page -->
     <div id="main-menu">
-        <h1>Dual-Mode 2D Top-down Shooter</h1>
+        <div id="main-lobby">
+            <h1 id="lobby-title">🎮 Dual-Mode 2D Top-down Shooter</h1>
 
-        <div class="menu-tabs">
-            <button id="tab-stash" class="active">個人倉庫 (Stash)</button>
-            <button id="tab-shop">商店 (Shop)</button>
-        </div>
-
-        <!-- The inventory UI will be dynamically moved/re-used here -->
-        <div id="menu-content-area">
-            <div id="shop-panel" class="hidden">
-                <h2>商店 (Buy: 100%, Sell: 30%)</h2>
-                <div id="shop-money">錢: $<span id="money-text">0</span></div>
-                <div id="shop-categories"
-                    style="display: flex; gap: 10px; margin: 15px 0; border-bottom: 1px solid #555; padding-bottom: 10px;">
-                </div>
-                <div id="shop-items"></div>
+            <!-- 4-tab navigation -->
+            <div class="menu-tabs" id="lobby-tabs">
+                <button id="tab-stash" class="menu-tab-btn" data-panel="panel-stash">🗃️ 倉庫裝備區</button>
+                <button id="tab-shop" class="menu-tab-btn" data-panel="panel-shop">🛒 購買區</button>
+                <button id="tab-exchange" class="menu-tab-btn" data-panel="panel-exchange">🔄 兌換區</button>
+                <button id="tab-play" class="menu-tab-btn active" data-panel="panel-play">▶ 遊戲開始</button>
             </div>
 
-            <div id="inventory-panel"
-                style="display: flex; gap: 40px; align-items: flex-start; justify-content: flex-start; width: 100%; flex-wrap: nowrap; padding-right: 20px; overflow-x: auto;">
-
-                <!-- Left: Equipment -->
-                <div id="equip-column" style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
-                    <div class="inventory-section equip-panel"
-                        style="background: #1e1e1e; border: 1px solid #333; padding: 10px; width: max-content;">
-                        <h3
-                            style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #444; padding-bottom: 5px; color: #acc;">
-                            裝備價值: $ ...</h3>
-
-                        <!-- Weapons Area -->
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <!-- Primary Weapons Column -->
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <div class="equip-slot-container">
-                                    <div class="slot-bg-text">主武器 1</div>
-                                    <div id="primary-grid" class="grid-container" style="width: 250px; height: 100px;">
-                                    </div>
-                                </div>
-                                <div class="equip-slot-container">
-                                    <div class="slot-bg-text">主武器 2</div>
-                                    <div id="primary-grid-2" class="grid-container"
-                                        style="width: 250px; height: 100px;"></div>
-                                </div>
-                            </div>
-
-                            <!-- Secondary / Melee Column -->
-                            <div style="display: flex; flex-direction: column; gap: 10px;">
-                                <div class="equip-slot-container">
-                                    <div class="slot-bg-text">手槍</div>
-                                    <div id="secondary-grid" class="grid-container"
-                                        style="width: 100px; height: 100px;"></div>
-                                </div>
-                                <div class="equip-slot-container">
-                                    <div class="slot-bg-text">近戰</div>
-                                    <div id="melee-grid" class="grid-container" style="width: 50px; height: 100px;">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Body Area -->
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <div class="equip-slot-container">
-                                <div class="slot-bg-text">頭盔</div>
-                                <div id="helmet-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
-                            </div>
-                            <div class="equip-slot-container">
-                                <div class="slot-bg-text">護甲</div>
-                                <div id="armor-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
-                            </div>
-                            <!-- Added Backpack visually to the row to save space like rig in reference -->
-                            <div class="equip-slot-container">
-                                <div class="slot-bg-text">背包裝備</div>
-                                <div id="backpack-equip-grid" class="grid-container"
-                                    style="width: 100px; height: 150px;"></div>
-                            </div>
-                        </div>
-
-                        <!-- Containers Area -->
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
-                            <div class="equip-slot-container">
-                                <div class="slot-bg-text">口袋 / 快捷</div>
-                                <div id="hotbar-grid" class="grid-container" style="width: 250px; height: 50px;"></div>
-                            </div>
-                            <div style="display: flex; flex-direction: column; gap: 5px; margin-left: 20px;">
-                                <div
-                                    style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                                    <span style="font-size: 14px; font-weight: bold; color: #acc;">保險箱</span>
-                                    <select id="secure-container-select"
-                                        style="background:#333; color:white; border:1px solid #555; padding:2px; font-size: 12px; outline: none;">
-                                        <option value="初始保險">初始 (2x2)</option>
-                                        <option value="中級保險">中級 (2x3) - $10,000解鎖</option>
-                                        <option value="高級保險">高級 (3x3) - 未解鎖</option>
-                                    </select>
-                                </div>
-                                <div class="equip-slot-container" style="align-self: flex-start;">
-                                    <div id="secure-grid" class="grid-container" style="width: 100px; height: 100px;">
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- Panel: 遊戲開始 (default visible) -->
+            <div id="panel-play" class="lobby-panel">
+                <div class="play-panel-inner">
+                    <div class="play-panel-desc">
+                        <h2>準備出發</h2>
+                        <p>選擇地圖，帶著你的裝備進入任務區。搜刮物資，消滅目標，安全撤離。</p>
+                        <p style="color:#facc15;font-size:13px;">💡 提示：進入前先到 <strong>倉庫裝備區</strong> 配備武裝，<strong>購買區</strong> 補充彈藥。</p>
                     </div>
-
-                    <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 10px;">
-                        <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">背包內容</h3>
-                        <div id="backpack-grid" class="grid-container"></div>
+                    <div class="play-panel-controls">
+                        <label style="font-size:13px;color:#aaa;">選擇地圖</label>
+                        <select id="map-select" class="lobby-select">
+                            <option value="1">🗺️ 地圖 1 — 工廠廢墟 (預設)</option>
+                            <option value="2">🗺️ 地圖 2 (開發中)</option>
+                            <option value="3">🗺️ 地圖 3 (開發中)</option>
+                        </select>
+                        <button id="btn-enter-raid" class="play-btn lobby-play-btn">▶ 進入任務 (Enter Raid)</button>
                     </div>
                 </div>
-
-                <!-- Right: Stash -->
-                <div class="inventory-section"
-                    style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
-                    <div
-                        style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
-                        <span style="font-weight: bold;">倉庫 (Stash)</span>
-                        <div style="display: flex; gap: 10px;">
-                            <button
-                                style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">整理</button>
-                            <button
-                                style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">轉移全部</button>
-                        </div>
-                    </div>
-                    <div id="stash-grid" class="grid-container"></div>
-                </div>
-
             </div>
-        </div>
 
-        <div style="display: flex; align-items: center; gap: 15px; margin-top: 10px;">
-            <select id="map-select"
-                style="background:#333; color:white; border:1px solid #555; padding:8px 12px; font-size:14px; border-radius:4px; outline:none; cursor:pointer;">
-                <option value="1">地圖 1 (預設)</option>
-                <option value="2">地圖 2</option>
-                <option value="3">地圖 3</option>
-            </select>
-            <button id="btn-enter-raid" class="play-btn" style="margin-top:0;">進入地圖 (Enter Raid)</button>
+            <!-- Panel: 倉庫裝備區 -->
+            <div id="panel-stash" class="lobby-panel hidden">
+                <div id="menu-content-area">
+                    <!-- inventory-panel will be inserted here by ui.js -->
+                    <div id="inventory-panel"
+                        style="display: flex; gap: 40px; align-items: flex-start; justify-content: flex-start; width: 100%; flex-wrap: nowrap; padding-right: 20px; overflow-x: auto;">
+
+                        <!-- Left: Equipment -->
+                        <div id="equip-column" style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
+                            <div class="inventory-section equip-panel"
+                                style="background: #1e1e1e; border: 1px solid #333; padding: 10px; width: max-content;">
+                                <h3 style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #444; padding-bottom: 5px; color: #acc;">
+                                    裝備價值: $ ...</h3>
+
+                                <!-- Weapons Area -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                                        <div class="equip-slot-container">
+                                            <div class="slot-bg-text">主武器 1</div>
+                                            <div id="primary-grid" class="grid-container" style="width: 250px; height: 100px;"></div>
+                                        </div>
+                                        <div class="equip-slot-container">
+                                            <div class="slot-bg-text">主武器 2</div>
+                                            <div id="primary-grid-2" class="grid-container" style="width: 250px; height: 100px;"></div>
+                                        </div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                                        <div class="equip-slot-container">
+                                            <div class="slot-bg-text">手槍</div>
+                                            <div id="secondary-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
+                                        </div>
+                                        <div class="equip-slot-container">
+                                            <div class="slot-bg-text">近戰</div>
+                                            <div id="melee-grid" class="grid-container" style="width: 50px; height: 100px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Body Area -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                    <div class="equip-slot-container">
+                                        <div class="slot-bg-text">頭盔</div>
+                                        <div id="helmet-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
+                                    </div>
+                                    <div class="equip-slot-container">
+                                        <div class="slot-bg-text">護甲</div>
+                                        <div id="armor-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
+                                    </div>
+                                    <div class="equip-slot-container">
+                                        <div class="slot-bg-text">背包裝備</div>
+                                        <div id="backpack-equip-grid" class="grid-container" style="width: 100px; height: 150px;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Containers Area -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                                    <div class="equip-slot-container">
+                                        <div class="slot-bg-text">口袋 / 快捷</div>
+                                        <div id="hotbar-grid" class="grid-container" style="width: 250px; height: 50px;"></div>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 5px; margin-left: 20px;">
+                                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                            <span style="font-size: 14px; font-weight: bold; color: #acc;">保險箱</span>
+                                            <select id="secure-container-select"
+                                                style="background:#333; color:white; border:1px solid #555; padding:2px; font-size: 12px; outline: none;">
+                                                <option value="初始保險">初始 (2x2)</option>
+                                                <option value="中級保險">中級 (2x3) - $10,000解鎖</option>
+                                                <option value="高級保險">高級 (3x3) - 未解鎖</option>
+                                            </select>
+                                        </div>
+                                        <div class="equip-slot-container" style="align-self: flex-start;">
+                                            <div id="secure-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 10px;">
+                                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">背包內容</h3>
+                                <div id="backpack-grid" class="grid-container"></div>
+                            </div>
+                        </div>
+
+                        <!-- Right: Stash -->
+                        <div class="inventory-section" style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
+                                <span style="font-weight: bold;">倉庫 (Stash)</span>
+                                <div style="display: flex; gap: 10px;">
+                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">整理</button>
+                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">轉移全部</button>
+                                </div>
+                            </div>
+                            <div id="stash-grid" class="grid-container"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Panel: 購買區 -->
+            <div id="panel-shop" class="lobby-panel hidden">
+                <div style="padding: 10px;">
+                    <h2 style="margin:0 0 10px 0; color:#acc;">🛒 購買區 (Buy: 100% | Sell: 30%)</h2>
+                    <div id="shop-money" style="margin-bottom:10px;">💰 餘額: $<span id="money-text">0</span></div>
+                    <div id="shop-categories" style="display: flex; gap: 10px; margin: 10px 0; border-bottom: 1px solid #555; padding-bottom: 10px;"></div>
+                    <div id="shop-items"></div>
+                </div>
+            </div>
+
+            <!-- Panel: 兌換區 -->
+            <div id="panel-exchange" class="lobby-panel hidden">
+                <div class="exchange-placeholder">
+                    <div class="exchange-icon">🔄</div>
+                    <h2>物資兌換區</h2>
+                    <p>以在任務中蒐集的物資換取裝備、彈藥或特殊道具。</p>
+                    <p style="color:#888;font-size:13px;">（兌換系統建置中，待地圖物資點確認後開放）</p>
+                    <div class="exchange-preview-list">
+                        <div class="exchange-item-preview">🎒 <strong>戰術背包</strong> → 3× 物資箱 + 1× 電子零件</div>
+                        <div class="exchange-item-preview">🪖 <strong>藍甲</strong> → 5× 鋼板 + 2× 維修套件</div>
+                        <div class="exchange-item-preview">🔫 <strong>步槍彈匣升級</strong> → 4× 零件 + $2000</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -309,16 +326,16 @@
 
         <!-- Inventory & Shop Overlay -->
         <div id="ui-overlay" class="hidden">
-            <div id="shop-panel">
+            <div id="overlay-shop-panel">
                 <h2>商店 (Buy: 100%, Sell: 30%)</h2>
-                <div id="shop-money">錢: $<span id="money-text">0</span></div>
+                <div id="overlay-shop-money">錢: $<span id="overlay-money-text">0</span></div>
                 <div id="overlay-shop-categories"
                     style="display: flex; gap: 10px; margin: 15px 0; border-bottom: 1px solid #555; padding-bottom: 10px;">
                 </div>
-                <div id="shop-items"></div>
+                <div id="overlay-shop-items"></div>
             </div>
 
-            <div id="inventory-panel"
+            <div id="overlay-inventory-panel"
                 style="display: flex; gap: 40px; align-items: flex-start; justify-content: flex-start; width: 100%; flex-wrap: nowrap; padding-right: 20px; overflow-x: auto;">
                 <!-- Left: Equipment & Backpack -->
                 <div style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
@@ -346,7 +363,7 @@
                     <h3>倉庫 (Stash)</h3>
                     <div id="overlay-stash-grid" class="grid-container"></div>
                 </div>
-            </div> <!-- End inventory-panel -->
+            </div> <!-- End overlay-inventory-panel -->
         </div> <!-- End ui-overlay -->
 
         <div id="error-msg"></div>
@@ -405,7 +422,7 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=6.9"></script>
+    <script type="module" src="main.js?v=8.3"></script>
 </body>
 
 </html>

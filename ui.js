@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=7.1';
+import { ItemDatabase, EconomyRules } from './db.js?v=8.3';
 
 export class UIManager {
     constructor(game) {
@@ -10,8 +10,14 @@ export class UIManager {
 
         this.shopMoney = document.getElementById('money-text');
         this.shopItems = document.getElementById('shop-items');
+        this.overlayShopMoney = document.getElementById('overlay-money-text');
+        this.overlayShopItems = document.getElementById('overlay-shop-items');
+
         this.stashGrid = document.getElementById('stash-grid');
         this.backpackGrid = document.getElementById('backpack-grid');
+        this.overlayStashGrid = document.getElementById('overlay-stash-grid');
+        this.overlayBackpackGrid = document.getElementById('overlay-backpack-grid');
+
         this.primaryGrid = document.getElementById('primary-grid');
         this.primaryGrid2 = document.getElementById('primary-grid-2');
         this.secondaryGrid = document.getElementById('secondary-grid');
@@ -23,8 +29,9 @@ export class UIManager {
         this.secureGrid = document.getElementById('secure-grid');
         this.secureSelect = document.getElementById('secure-container-select');
 
-        this.shopPanel = document.getElementById('shop-panel');
-        this.inventoryPanel = document.getElementById('inventory-panel');
+        this.shopPanel = document.getElementById('panel-shop');
+        this.inventoryPanel = document.getElementById('inventory-panel'); 
+        this.overlayInventoryPanel = document.getElementById('overlay-inventory-panel');
 
         this.cellSize = 50; // Match CSS Grid size
 
@@ -37,6 +44,14 @@ export class UIManager {
         this.grabOffsetX = 0;
         this.grabOffsetY = 0;
 
+        // Hold-to-Drag State (0.5s delay before drag activates)
+        this.holdTimer = null;          // setTimeout handle
+        this.pendingDragItemId = null;  // item we are holding down on
+        this.pendingDragDiv = null;     // element we are holding
+        this.pendingDragE = null;       // original mousedown event
+        this.isDragActive = false;      // true once drag threshold passed
+        this.holdThresholdMs = 300;     // ms before drag activates
+
         // Stats Modal
         this.statsModal = document.getElementById('item-stats-modal');
         this.statsTitle = document.getElementById('stats-title');
@@ -46,29 +61,36 @@ export class UIManager {
     }
 
     bindEvents() {
-        // Tab Switching
-        const tabStash = document.getElementById('tab-stash');
-        if (tabStash) {
-            tabStash.addEventListener('click', (e) => {
-                tabStash.classList.add('active');
-                const tabShop = document.getElementById('tab-shop');
-                if (tabShop) tabShop.classList.remove('active');
-                this.shopPanel.classList.add('hidden');
-                this.inventoryPanel.classList.remove('hidden');
-                this.refreshInventory();
-            });
-        }
+        // ── 4-Tab Panel Switching ──────────────────────────────────────────
+        const lobbyTabs = document.querySelectorAll('.menu-tab-btn');
+        const lobbyPanels = document.querySelectorAll('.lobby-panel');
 
-        const tabShopBtn = document.getElementById('tab-shop');
-        if (tabShopBtn) {
-            tabShopBtn.addEventListener('click', (e) => {
-                tabShopBtn.classList.add('active');
-                if (tabStash) tabStash.classList.remove('active');
-                this.inventoryPanel.classList.add('hidden');
-                this.shopPanel.classList.remove('hidden');
+        const switchLobbyTab = (targetPanelId) => {
+            lobbyTabs.forEach(btn => btn.classList.remove('active'));
+            lobbyPanels.forEach(p => p.classList.add('hidden'));
+            const targetBtn = document.querySelector(`[data-panel="${targetPanelId}"]`);
+            const targetPanel = document.getElementById(targetPanelId);
+            if (targetBtn) targetBtn.classList.add('active');
+            if (targetPanel) targetPanel.classList.remove('hidden');
+
+            // Trigger refresh logic on specific panels
+            if (targetPanelId === 'panel-stash') {
+                this.refreshInventory();
+            } else if (targetPanelId === 'panel-shop') {
                 this.refreshShop();
+            }
+        };
+
+        lobbyTabs.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                const panelId = btn.dataset.panel;
+                console.log('[UIManager] Switching to tab:', panelId);
+                if (panelId) switchLobbyTab(panelId);
             });
-        }
+        });
+
+        this.switchLobbyTab = switchLobbyTab; // expose for external use
 
         // Enter Raid / Back to Menu
         const btnEnterRaid = document.getElementById('btn-enter-raid');
@@ -114,7 +136,7 @@ export class UIManager {
                     this.clearAttachment();
                     this.refreshInventory();
                 } else if (!this.game.isInMenu) {
-                    document.getElementById('btn-back-menu').click();
+                    backToMenuAction();
                 }
             }
             if (e.key.toLowerCase() === 'r') {
@@ -218,6 +240,33 @@ export class UIManager {
         // Global mouse release to handle dropping
         document.addEventListener('mouseup', (e) => {
             if (e.button !== 0) return; // only left click
+
+            // Cancel any pending hold-to-drag
+            const quickClickId = this.pendingDragItemId; // capture before _cancelHold clears it
+            const wasActive = this.isDragActive;
+            this._cancelHold();
+
+            // Quick-click (mouseup before hold threshold) → move to stash
+            if (!wasActive && quickClickId && this.attachedItemId === null) {
+                const qItem = this.inv.items.find(i => i.id === quickClickId);
+                // If item is not in stash, move it to stash
+                if (qItem && qItem.container !== 'stash') {
+                    const dbItem = ItemDatabase[qItem.typeId];
+                    const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.stash);
+                    if (slot) {
+                        const res = this.inv.moveItem(qItem.id, 'stash', slot.x, slot.y, slot.rotated);
+                        if (res && res.success) {
+                            this.refreshInventory();
+                            this.game.updateHUD();
+                        }
+                    } else {
+                        // Notify user stash is full?
+                        this._showQuickEquipError("倉庫空間不足，無法自動移入");
+                    }
+                    return;
+                }
+            }
+
             if (this.attachedItemId !== null) {
                 // Don't drop immediately if clicking a delete button to sell
                 if (e.target.classList && e.target.classList.contains('item-delete-btn')) return;
@@ -329,6 +378,37 @@ export class UIManager {
                 }
             };
         }
+    }
+
+    _cancelHold() {
+        if (this.holdTimer !== null) {
+            clearTimeout(this.holdTimer);
+            this.holdTimer = null;
+        }
+        this.pendingDragItemId = null;
+        this.pendingDragDiv = null;
+        this.pendingDragE = null;
+        this.isDragActive = false;
+    }
+
+    _showQuickEquipError(msg) {
+        let existing = document.getElementById('quick-equip-error');
+        if (existing) existing.remove();
+        const el = document.createElement('div');
+        el.id = 'quick-equip-error';
+        el.textContent = '⚠️ ' + msg;
+        el.style.cssText = [
+            'position:fixed', 'bottom:80px', 'left:50%',
+            'transform:translateX(-50%)',
+            'background:rgba(200,30,30,0.95)', 'color:#fff',
+            'padding:10px 24px', 'border-radius:8px',
+            'font-size:16px', 'font-weight:bold',
+            'z-index:9999', 'pointer-events:none',
+            'box-shadow:0 4px 16px rgba(0,0,0,0.6)',
+            'animation:fadeOutToast 2.5s forwards'
+        ].join(';');
+        document.body.appendChild(el);
+        setTimeout(() => el.remove(), 2500);
     }
 
     clearAttachment() {
@@ -510,14 +590,19 @@ export class UIManager {
     }
 
     refreshShop() {
-        this.shopMoney.innerText = this.inv.player.money;
-        this.shopItems.innerHTML = '';
-        this.shopItems.style.display = 'flex';
-        this.shopItems.style.flexWrap = 'wrap';
-        this.shopItems.style.gap = '15px';
+        const isOverlay = !this.game.isInMenu;
+        const curItemsContainer = isOverlay ? this.overlayShopItems : this.shopItems;
+        const curMoneyText = isOverlay ? this.overlayShopMoney : this.shopMoney;
+        const categoriesContainerId = isOverlay ? 'overlay-shop-categories' : 'shop-categories';
+        const categoriesContainer = document.getElementById(categoriesContainerId);
 
-        let categoriesContainer = document.getElementById('shop-categories');
-        if (!categoriesContainer) categoriesContainer = document.getElementById('overlay-shop-categories');
+        if (curMoneyText) curMoneyText.innerText = this.inv.player.money;
+        if (curItemsContainer) {
+            curItemsContainer.innerHTML = '';
+            curItemsContainer.style.display = 'flex';
+            curItemsContainer.style.flexWrap = 'wrap';
+            curItemsContainer.style.gap = '15px';
+        }
 
         if (categoriesContainer) {
             categoriesContainer.innerHTML = '';
@@ -534,7 +619,6 @@ export class UIManager {
 
         for (let key in ItemDatabase) {
             const item = ItemDatabase[key];
-            // Skip items that shouldn't be sold (price 0, or certain types)
             if (!item.price || item.price <= 0) continue;
             if (item.type === 'secure' && !item.price) continue;
 
@@ -551,37 +635,40 @@ export class UIManager {
             for (let catName in categories) {
                 const btn = document.createElement('button');
                 btn.innerText = catName;
+                btn.className = 'shop-cat-btn';
                 btn.style.padding = '5px 10px';
                 btn.style.cursor = 'pointer';
                 btn.style.background = this.currentShopCategory === catName ? '#555' : '#333';
                 btn.style.color = '#fff';
                 btn.style.border = '1px solid #777';
 
-                btn.onclick = () => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('[UIManager] Shop category selected:', catName);
                     this.currentShopCategory = catName;
                     this.refreshShop();
                 };
                 categoriesContainer.appendChild(btn);
             }
+        } else {
+            console.warn('[UIManager] Categories container NOT FOUND for:', categoriesContainerId);
         }
 
-        // Render only the active category
         let activeCategoryItems = categories[this.currentShopCategory] || [];
-
-        // Sub-category filter bar (weapon classes OR ammo tiers)
         const isWeaponTab = this.currentShopCategory === '武器';
-        const isAmmoTab = activeCategoryItems.length > 0 && activeCategoryItems[0].item.type === 'ammo';
 
-        if (isWeaponTab) {
+        if (isWeaponTab && curItemsContainer) {
             const weaponClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.weaponClass || '其他'))];
             if (!this.currentWeaponSubCat || !weaponClasses.includes(this.currentWeaponSubCat)) this.currentWeaponSubCat = '全部';
 
-            let subBar = document.getElementById('weapon-subcat-bar');
+            let subBarId = isOverlay ? 'overlay-weapon-subcat-bar' : 'lobby-weapon-subcat-bar';
+            let subBar = document.getElementById(subBarId);
             if (!subBar) {
                 subBar = document.createElement('div');
-                subBar.id = 'weapon-subcat-bar';
+                subBar.id = subBarId;
                 subBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding:8px; background:#1a1a1a; border-radius:6px; border:1px solid #444;';
-                this.shopItems.before(subBar);
+                curItemsContainer.before(subBar);
             }
             subBar.innerHTML = '';
             weaponClasses.forEach(cls => {
@@ -589,22 +676,22 @@ export class UIManager {
                 sbtn.innerText = cls;
                 sbtn.style.cssText = `padding:4px 12px; cursor:pointer; border-radius:4px; border:1px solid #666;
                     background:${this.currentWeaponSubCat === cls ? '#0066cc' : '#333'}; color:#fff; font-size:13px;`;
-                sbtn.onclick = () => { this.currentWeaponSubCat = cls; this.refreshShop(); };
+                sbtn.onclick = (e) => { e.stopPropagation(); this.currentWeaponSubCat = cls; this.refreshShop(); };
                 subBar.appendChild(sbtn);
             });
             if (this.currentWeaponSubCat !== '全部') {
                 activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.weaponClass || '其他') === this.currentWeaponSubCat);
             }
-        } else if (this.currentShopCategory === '子彈') {
-            // Caliber class buttons only - all tiers shown once caliber is selected
+        } else if (this.currentShopCategory === '子彈' && curItemsContainer) {
             const ammoClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.ammoClass || '特殊'))];
             if (!this.ammoClassSubCat || !ammoClasses.includes(this.ammoClassSubCat)) this.ammoClassSubCat = '全部';
 
-            let subBar = document.getElementById('weapon-subcat-bar');
+            let subBarId = isOverlay ? 'overlay-weapon-subcat-bar' : 'lobby-weapon-subcat-bar';
+            let subBar = document.getElementById(subBarId);
             if (!subBar) {
                 subBar = document.createElement('div');
-                subBar.id = 'weapon-subcat-bar';
-                this.shopItems.before(subBar);
+                subBar.id = subBarId;
+                curItemsContainer.before(subBar);
             }
             subBar.innerHTML = '';
             subBar.style.cssText = 'display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px; padding:8px; background:#1a1a1a; border-radius:6px; border:1px solid #444;';
@@ -714,39 +801,58 @@ export class UIManager {
     }
 
     refreshInventory() {
-        this.shopMoney.innerText = this.inv.player.money;
-        this.stashGrid.innerHTML = '';
-        this.backpackGrid.innerHTML = '';
-        this.primaryGrid.innerHTML = '';
-        this.primaryGrid2.innerHTML = '';
-        this.secondaryGrid.innerHTML = '';
-        this.meleeGrid.innerHTML = '';
-        this.armorGrid.innerHTML = '';
-        this.helmetGrid.innerHTML = '';
-        this.hotbarGrid.innerHTML = '';
-        this.backpackEquipGrid.innerHTML = '';
-        this.secureGrid.innerHTML = '';
+        const overlayBackpackGrid = document.getElementById('overlay-backpack-grid');
+        const overlayStashGrid = document.getElementById('overlay-stash-grid');
+        const overlayHelmetGrid = document.getElementById('ui-helmet-grid');
+
+        const allGrids = [
+            this.stashGrid, this.backpackGrid, this.primaryGrid, this.primaryGrid2,
+            this.secondaryGrid, this.meleeGrid, this.armorGrid, this.helmetGrid,
+            this.hotbarGrid, this.backpackEquipGrid, this.secureGrid,
+            overlayBackpackGrid, overlayStashGrid, overlayHelmetGrid
+        ];
+
+        allGrids.forEach(g => { if (g) g.innerHTML = ''; });
+
+        const gridMapping = {
+            'primaryWep': [this.primaryGrid],
+            'primaryWep2': [this.primaryGrid2],
+            'secondaryWep': [this.secondaryGrid],
+            'meleeWep': [this.meleeGrid],
+            'armorSlot': [this.armorGrid],
+            'helmetSlot': [this.helmetGrid, overlayHelmetGrid],
+            'hotbarSlot': [this.hotbarGrid],
+            'backpackSlot': [this.backpackEquipGrid],
+            'secureSlot': [this.secureGrid],
+            'backpack': [this.backpackGrid, overlayBackpackGrid],
+            'stash': [this.stashGrid, overlayStashGrid]
+        };
 
         // Dynamic Backpack Storage Scaling
         const equippedBackpack = this.inv.items.find(i => i.container === 'backpackSlot');
-        const backpackSectionDom = this.backpackGrid.closest('.inventory-section') || this.backpackGrid.parentElement;
+        const updateBackpackSize = (grid, isBp) => {
+            if (!grid) return;
+            const section = grid.closest('.inventory-section') || grid.parentElement;
+            if (isBp) {
+                const bpData = ItemDatabase[equippedBackpack.typeId];
+                this.inv.backpack.w = bpData.capW;
+                this.inv.backpack.h = bpData.capH;
+                if (section) section.style.display = 'block';
+                grid.style.width = (bpData.capW * this.cellSize) + 'px';
+                grid.style.height = (bpData.capH * this.cellSize) + 'px';
+            } else {
+                this.inv.backpack.w = 0;
+                this.inv.backpack.h = 0;
+                if (section) section.style.display = 'none';
+            }
+        };
 
-        if (equippedBackpack) {
-            const bpData = ItemDatabase[equippedBackpack.typeId];
-            this.inv.backpack.w = bpData.capW;
-            this.inv.backpack.h = bpData.capH;
-            backpackSectionDom.style.display = 'block';
-            this.backpackGrid.style.width = (bpData.capW * this.cellSize) + 'px';
-            this.backpackGrid.style.height = (bpData.capH * this.cellSize) + 'px';
-        } else {
-            this.inv.backpack.w = 0;
-            this.inv.backpack.h = 0;
-            if (backpackSectionDom) backpackSectionDom.style.display = 'none';
-        }
+        updateBackpackSize(this.backpackGrid, !!equippedBackpack);
+        updateBackpackSize(overlayBackpackGrid, !!equippedBackpack);
 
         // Update Secure Container Grid Visually
         const secureData = ItemDatabase[this.inv.secureContainerType];
-        if (secureData) {
+        if (secureData && this.secureGrid) {
             this.secureGrid.style.width = (secureData.capW * this.cellSize) + 'px';
             this.secureGrid.style.height = (secureData.capH * this.cellSize) + 'px';
             if (this.secureSelect) this.secureSelect.value = this.inv.secureContainerType;
@@ -857,68 +963,109 @@ export class UIManager {
                 }
             });
 
-            // Double click to auto equip/unequip
+            // Double click to quick-equip (with overflow handling)
             div.addEventListener('dblclick', (e) => {
+                // Cancel any pending hold-drag
+                this._cancelHold();
                 if (this.attachedItemId !== null) return;
-                
+
+                const dbItem = ItemDatabase[item.typeId];
+
+                // For weapons: try primaryWep → primaryWep2 → backpack → error
+                if (dbItem && dbItem.type === 'weapon' && dbItem.gridW * dbItem.gridH > 2) {
+                    // Large weapon: primaryWep1 → primaryWep2 → backpack
+                    let placed = false;
+                    for (const cName of ['primaryWep', 'primaryWep2']) {
+                        if (item.container === cName) continue;
+                        const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv[cName]);
+                        if (slot) {
+                            const res = this.inv.moveItem(item.id, cName, slot.x, slot.y, slot.rotated);
+                            if (res && res.success) { placed = true; break; }
+                        }
+                    }
+                    if (!placed) {
+                        // Try backpack
+                        const bpSlot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.backpack);
+                        if (bpSlot) {
+                            const res = this.inv.moveItem(item.id, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated);
+                            if (res && res.success) placed = true;
+                        }
+                    }
+                    if (!placed) {
+                        this._showQuickEquipError('主武器欄位與背包均已滿，無法快速放入');
+                        return;
+                    }
+                    this.refreshInventory();
+                    this.game.updateHUD();
+                    return;
+                }
+
+                // Default: use standard autoEquip
                 if (this.inv.autoEquip(item.id)) {
                     this.refreshInventory();
                     this.game.updateHUD();
+                } else if (item.container !== 'stash') {
+                    // autoEquip failed - try stash fallback
+                    this._showQuickEquipError('所有目標欄位與背包均已滿，無法快速放入');
                 }
             });
 
-            // Click to Pickup
+            // Click to Pickup (with 0.5s hold-to-drag)
             div.addEventListener('mousedown', (e) => {
-                // If clicking another item while holding one, don't pick it up directly, 
-                // wait for drop fail first, or swap them (let's stick to fail first for simplicity)
                 if (this.attachedItemId !== null || e.target.classList.contains('item-delete-btn')) return;
+                if (e.button !== 0) return;
 
                 const rect = div.getBoundingClientRect();
-                this.grabOffsetX = e.clientX - rect.left;
-                this.grabOffsetY = e.clientY - rect.top;
+                const grabX = e.clientX - rect.left;
+                const grabY = e.clientY - rect.top;
 
-                this.attachedItemId = item.id;
-                this.attachedElement = div;
-                this.dragRotated = item.rotated;
+                // Store pending drag state
+                this.pendingDragItemId = item.id;
+                this.pendingDragDiv = div;
+                this.pendingDragE = e;
+                this.isDragActive = false;
 
-                // Move from grid layout DOM to document body for absolute positioning
-                document.body.appendChild(div);
-                div.style.position = 'absolute';
-                div.style.zIndex = '3000'; // Ensure above inventoryPanel (2000)
-                div.style.left = (e.pageX - this.grabOffsetX) + 'px';
-                div.style.top = (e.pageY - this.grabOffsetY) + 'px';
-                div.style.pointerEvents = 'none'; // So mouse moves over grids, not this block
+                // Start hold timer - activate drag after threshold
+                this.holdTimer = setTimeout(() => {
+                    if (this.pendingDragItemId !== item.id) return;
+                    this.isDragActive = true;
 
-                // Immediately call mousemove to ensure preview draws if mouse doesn't move
-                this.handleMouseMove(e);
+                    this.grabOffsetX = grabX;
+                    this.grabOffsetY = grabY;
+                    this.attachedItemId = item.id;
+                    this.attachedElement = div;
+                    this.dragRotated = item.rotated;
+
+                    document.body.appendChild(div);
+                    div.style.position = 'fixed';
+                    div.style.zIndex = '9999';
+                    div.style.left = (this.pendingDragE.clientX - this.grabOffsetX) + 'px';
+                    div.style.top = (this.pendingDragE.clientY - this.grabOffsetY) + 'px';
+                    div.style.pointerEvents = 'none';
+                    div.style.opacity = '1';
+                    div.style.display = 'flex';
+
+                    this.handleMouseMove(this.lastMouseE || this.pendingDragE);
+                }, this.holdThresholdMs);
             });
 
             // Prevent attaching this specific element to grids if it is currently actively dragged
             if (this.attachedItemId === item.id) return;
 
-            if (item.container === 'stash') {
-                this.stashGrid.appendChild(div);
-            } else if (item.container === 'backpack') {
-                this.backpackGrid.appendChild(div);
-            } else if (item.container === 'primaryWep') {
-                this.primaryGrid.appendChild(div);
-            } else if (item.container === 'primaryWep2') {
-                this.primaryGrid2.appendChild(div);
-            } else if (item.container === 'secondaryWep') {
-                this.secondaryGrid.appendChild(div);
-            } else if (item.container === 'meleeSlot') {
-                this.meleeGrid.appendChild(div);
-            } else if (item.container === 'armorSlot') {
-                this.armorGrid.appendChild(div);
-            } else if (item.container === 'helmetSlot') {
-                this.helmetGrid.appendChild(div);
-            } else if (item.container === 'hotbarSlot') {
-                this.hotbarGrid.appendChild(div);
-            } else if (item.container === 'backpackSlot') {
-                this.backpackEquipGrid.appendChild(div);
-            } else if (item.container === 'secureContainer') {
-                this.secureGrid.appendChild(div);
-            }
+            const targets = gridMapping[item.container] || [];
+            targets.forEach((grid, idx) => {
+                if (!grid) return;
+                if (idx === 0) {
+                    grid.appendChild(div);
+                } else {
+                    // Clone for secondary grids (Overlay)
+                    const clone = div.cloneNode(true);
+                    // Re-bind events to clone if needed, but for now simple display is enough
+                    // Actually, for consistency, clones should also handle drag? 
+                    // No, usually only one is visible.
+                    grid.appendChild(clone);
+                }
+            });
         });
     }
 

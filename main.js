@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=6.9';
-import { UIManager } from './ui.js?v=7.5';
-import { ItemDatabase } from './db.js?v=7.0';
-import { GameSimulation } from './game_simulation.js?v=1.0';
+import { InventorySystem } from './inventory.js?v=8.1';
+import { UIManager } from './ui.js?v=8.1';
+import { ItemDatabase, EconomyRules } from './db.js?v=8.1';
+import { GameSimulation } from './game_simulation.js?v=8.1';
 
 const WGSL_SHADER = `
 struct VertexOutput {

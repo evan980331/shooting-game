@@ -4,9 +4,7 @@ body {
     background-color: #111;
     color: #fff;
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    width: 100vw;
     height: 100vh;
     overflow: hidden;
 }
@@ -58,67 +56,222 @@ body {
     align-items: center;
 }
 
-/* Main Menu Styles */
+/* Main Menu / Lobby Styles */
 #main-menu {
     width: 100vw;
     height: 100vh;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    background-color: #1a1a1a;
-    padding-top: 20px;
+    align-items: stretch;
+    background: linear-gradient(135deg, #0d0d0d 0%, #1a1a2e 50%, #16213e 100%);
     box-sizing: border-box;
+    overflow: hidden;
 }
 
-#main-menu h1 {
-    color: #ffd700;
-    margin-bottom: 20px;
-}
-
-.menu-tabs {
+#main-lobby {
     display: flex;
-    gap: 10px;
-    margin-bottom: 20px;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
 }
 
-.menu-tabs button {
-    padding: 10px 20px;
-    background-color: #333;
-    color: white;
-    border: 2px solid #555;
+#lobby-title {
+    color: #ffd700;
+    margin: 0;
+    padding: 16px 24px 8px;
+    font-size: 22px;
+    letter-spacing: 1px;
+    text-shadow: 0 0 20px rgba(255,215,0,0.4);
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+    background: #111; /* Ensure background is solid when content scrolls under? No, it doesn't scroll under yet */
+}
+
+/* ── 4-tab navigation bar ─────────────────────────────────────────── */
+#lobby-tabs {
+    display: flex;
+    gap: 0;
+    flex-shrink: 0;
+    background: #111;
+    border-bottom: 2px solid #333;
+}
+
+.menu-tab-btn {
+    padding: 12px 28px;
+    background: transparent;
+    color: #999;
+    border: none;
+    border-right: 1px solid #333;
     cursor: pointer;
-    font-size: 16px;
-    border-radius: 4px;
-    transition: background-color 0.2s, border-color 0.2s;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    transition: color 0.2s, background 0.2s, border-bottom 0.15s;
+    border-bottom: 3px solid transparent;
+    outline: none;
 }
 
-.menu-tabs button:hover {
-    background-color: #444;
+.menu-tab-btn:hover {
+    background: rgba(255,255,255,0.06);
+    color: #ddd;
 }
 
-.menu-tabs button.active {
-    background-color: #0066cc;
-    border-color: #66b3ff;
+.menu-tab-btn.active {
+    color: #ffd700;
+    background: rgba(255,215,0,0.08);
+    border-bottom: 3px solid #ffd700;
 }
 
-#menu-content-area {
-    width: 95%;
-    max-width: 1600px;
-    flex-grow: 1;
-    background-color: #222;
-    border: 2px solid #444;
+/* ── Lobby Panels ─────────────────────────────────────────────────── */
+.lobby-panel {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    padding: 20px 24px;
+    box-sizing: border-box;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: #555 #111;
+}
+
+/* ── 遊戲開始 Panel ─────────────────────────────────────────────── */
+.play-panel-inner {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    padding: 30px 0;
+    max-width: 900px;
+}
+
+.play-panel-desc {
+    flex: 1;
+}
+
+.play-panel-desc h2 {
+    color: #ffd700;
+    font-size: 28px;
+    margin: 0 0 14px;
+}
+
+.play-panel-desc p {
+    color: #bbb;
+    line-height: 1.7;
+    margin: 0 0 10px;
+}
+
+.play-panel-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    flex-shrink: 0;
+    min-width: 280px;
+}
+
+.lobby-select {
+    background: #222;
+    color: white;
+    border: 1px solid #555;
+    padding: 10px 14px;
+    font-size: 14px;
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.lobby-select:hover {
+    border-color: #ffd700;
+}
+
+.lobby-play-btn {
+    margin: 0 !important;
+    padding: 14px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    background: linear-gradient(135deg, #00b33c, #007a29);
+    color: white;
+    border: none;
     border-radius: 8px;
-    padding: 20px;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,180,60,0.35);
+    transition: transform 0.1s, box-shadow 0.2s;
+}
+
+.lobby-play-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,200,70,0.5);
+}
+
+.lobby-play-btn:active {
+    transform: translateY(1px);
+}
+
+/* ── 兌換區 Placeholder ─────────────────────────────────────────── */
+.exchange-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #bbb;
+}
+
+.exchange-icon {
+    font-size: 64px;
+    margin-bottom: 20px;
+    filter: drop-shadow(0 0 20px rgba(100,200,255,0.3));
+}
+
+.exchange-placeholder h2 {
+    color: #61dafb;
+    font-size: 26px;
+    margin: 0 0 12px;
+}
+
+.exchange-placeholder p {
+    color: #999;
+    max-width: 500px;
+    line-height: 1.6;
+    margin: 0 0 10px;
+}
+
+.exchange-preview-list {
+    margin-top: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 500px;
+}
+
+.exchange-item-preview {
+    background: rgba(97,218,251,0.06);
+    border: 1px solid rgba(97,218,251,0.2);
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 14px;
+    color: #ccc;
+    text-align: left;
+}
+
+/* ── 倉庫裝備區 Panel ──────────────────────────────────────────── */
+#menu-content-area {
+    width: 100%;
+    max-width: 1600px;
+    background-color: transparent;
+    border: none;
+    padding: 0;
     box-sizing: border-box;
     display: block;
-    /* Removed flex centering to prevent overflow collapse */
     overflow-x: auto;
-    overflow-y: auto;
+    overflow-y: visible;
     position: relative;
-    white-space: nowrap;
-    /* Ensures horizontal scrolling for inner blocks */
+    /* No white-space:nowrap - let items wrap and allow full vertical scroll */
 }
 
+/* Keep old play-btn for in-game screens */
 .play-btn {
     margin: 20px 0;
     padding: 15px 40px;
@@ -141,6 +294,7 @@ body {
 .play-btn:active {
     transform: translateY(1px);
 }
+
 
 #error-msg {
     position: absolute;
@@ -213,8 +367,8 @@ body {
     box-sizing: border-box;
 }
 
-#shop-panel,
-#inventory-panel {
+/* In-raid overlay panels (shop/inventory inside game ui-overlay) */
+#overlay-shop-panel {
     background: #222;
     border: 2px solid #555;
     border-radius: 8px;
@@ -222,18 +376,23 @@ body {
     color: #ddd;
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.8);
     display: flex;
+    flex-direction: column;
     max-height: 90vh;
     overflow-y: auto;
     width: 100%;
 }
 
-#shop-panel {
-    flex-direction: column;
+/* inventory-panel: used both in lobby (#panel-stash) and in-raid overlay */
+#inventory-panel, #overlay-inventory-panel {
+    display: flex;
+    flex-direction: row;
+    gap: 40px;
+    align-items: flex-start;
+    width: max-content;  /* allow content to expand naturally; outer scrolls */
+    min-width: 100%;
+    padding-bottom: 100px; /* Buffer for scrolling to the very bottom */
 }
 
-#inventory-panel {
-    flex-direction: row;
-}
 
 .shop-item {
     background: #333;
