@@ -223,7 +223,14 @@ export class UIManager {
                 if (e.target.classList && e.target.classList.contains('item-delete-btn')) return;
 
                 if (this.currentHoverContainer && this.hoverValid) {
-                    if (this.inv.moveItem(this.attachedItemId, this.currentHoverContainer, this.currentHoverGridX, this.currentHoverGridY, this.dragRotated)) {
+                    let moveSuccess = false;
+                    if (this.hoverSwapTargetId) {
+                        moveSuccess = this.inv.swapItems(this.attachedItemId, this.hoverSwapTargetId);
+                    } else {
+                        moveSuccess = this.inv.moveItem(this.attachedItemId, this.currentHoverContainer, this.currentHoverGridX, this.currentHoverGridY, this.dragRotated);
+                    }
+
+                    if (moveSuccess) {
                         this.clearAttachment();
                         this.refreshInventory();
                         this.game.updateHUD();
@@ -232,6 +239,7 @@ export class UIManager {
                         this.clearAttachment();
                         this.refreshInventory();
                     }
+                    this.hoverSwapTargetId = null;
                 } else {
                     const elem = document.elementFromPoint(e.clientX, e.clientY);
                     const invItemDiv = elem ? elem.closest('.inventory-item') : null;
@@ -400,6 +408,23 @@ export class UIManager {
 
                     if (isValidTarget && this.inv.canPlaceItem(w, h, gridCoordX, gridCoordY, this.inv[containerName], this.attachedItemId)) {
                         canPlace = true;
+                    } else if (isValidTarget) {
+                        // Check for exact dimension swap
+                        let targetId = this.inv.getOverlappingItem(w, h, gridCoordX, gridCoordY, containerName, this.attachedItemId);
+                        if (targetId) {
+                            let targetObj = this.inv.items.find(i => i.id === targetId);
+                            if (targetObj) {
+                                let tDb = ItemDatabase[targetObj.typeId];
+                                let tw = targetObj.rotated ? tDb.gridH : tDb.gridW;
+                                let th = targetObj.rotated ? tDb.gridW : tDb.gridH;
+                                if (w === tw && h === th && targetObj.x === gridCoordX && targetObj.y === gridCoordY) {
+                                    canPlace = true;
+                                    this.hoverSwapTargetId = targetId;
+                                } else {
+                                    this.hoverSwapTargetId = null;
+                                }
+                            } else { this.hoverSwapTargetId = null; }
+                        } else { this.hoverSwapTargetId = null; }
                     }
 
                     // Save the active valid drop target for mouseup
@@ -829,6 +854,16 @@ export class UIManager {
                 const dbItemObj = ItemDatabase[item.typeId];
                 if (dbItemObj && (dbItemObj.type === 'medical' || dbItemObj.type === 'medical-buff')) {
                     this.game.useItemDirectly(item);
+                }
+            });
+
+            // Double click to auto equip/unequip
+            div.addEventListener('dblclick', (e) => {
+                if (this.attachedItemId !== null) return;
+                
+                if (this.inv.autoEquip(item.id)) {
+                    this.refreshInventory();
+                    this.game.updateHUD();
                 }
             });
 

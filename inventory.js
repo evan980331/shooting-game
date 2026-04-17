@@ -205,6 +205,132 @@ export class InventorySystem {
         return { success: false };
     }
 
+    autoEquip(itemId) {
+        const item = this.items.find(i => i.id === itemId);
+        if (!item) return false;
+        
+        const dbItem = ItemDatabase[item.typeId];
+        let targetContainers = [];
+        
+        if (dbItem.type === 'weapon') {
+            if (dbItem.gridW * dbItem.gridH <= 2) targetContainers = ['secondaryWep', 'primaryWep', 'primaryWep2'];
+            else targetContainers = ['primaryWep', 'primaryWep2'];
+        } else if (dbItem.type === 'armor') targetContainers = ['armorSlot'];
+        else if (dbItem.type === 'helmet') targetContainers = ['helmetSlot'];
+        else if (dbItem.type === 'backpack') targetContainers = ['backpackSlot'];
+        else if (dbItem.type === 'melee') targetContainers = ['meleeSlot'];
+        else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff' || dbItem.type === 'throwable' || dbItem.type === 'ammo') {
+            // First try hotbar, then pockets/secure
+            targetContainers = ['hotbarSlot', 'secureContainer'];
+        }
+
+        // Try equipping it
+        for (let cName of targetContainers) {
+            if (cName === item.container) continue; // Skip current
+            const container = this[cName];
+            if (!container) continue;
+            
+            const slot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, container);
+            if (slot) {
+                return this.moveItem(itemId, cName, slot.x, slot.y, slot.rotated).success;
+            } else if (cName === 'primaryWep' || cName === 'primaryWep2' || cName === 'armorSlot' || cName === 'helmetSlot' || cName === 'backpackSlot' || cName === 'secondaryWep' || cName === 'meleeSlot') {
+                // If equipment slot is full, attempt a direct swap with the first item in there!
+                const existingItem = this.items.find(i => i.container === cName);
+                if (existingItem && this.swapItems(itemId, existingItem.id)) {
+                     return true;
+                }
+            }
+        }
+        
+        // If it was already in a gear slot (not stash), and we double clicked it: unequip to stash
+        if (item.container !== 'stash') {
+            const slot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.stash);
+            if (slot) {
+                return this.moveItem(itemId, "stash", slot.x, slot.y, slot.rotated).success;
+            }
+        }
+        
+        return false;
+    }
+
+    swapItems(itemId1, itemId2) {
+        const item1 = this.items.find(i => i.id === itemId1);
+        const item2 = this.items.find(i => i.id === itemId2);
+        if (!item1 || !item2) return false;
+
+        const container1 = this[item1.container];
+        const container2 = this[item2.container];
+
+        // Ensure restrictions pass
+        const validPlacement = (itemToMove, targetName) => {
+            const dbItem = ItemDatabase[itemToMove.typeId];
+            if (targetName === 'primaryWep' || targetName === 'primaryWep2') return dbItem.type === 'weapon';
+            if (targetName === 'secondaryWep') return dbItem.type === 'weapon' && (dbItem.gridW * dbItem.gridH <= 2);
+            if (targetName === 'meleeSlot') return dbItem.type === 'melee';
+            if (targetName === 'armorSlot') return dbItem.type === 'armor';
+            if (targetName === 'helmetSlot') return dbItem.type === 'helmet';
+            if (targetName === 'backpackSlot') return dbItem.type === 'backpack';
+            if (targetName === 'secureContainer') return !['backpack', 'secure'].includes(dbItem.type);
+            return true;
+        };
+
+        if (!validPlacement(item1, item2.container) || !validPlacement(item2, item1.container)) return false;
+
+        // Temporarily free both
+        this.freeGrid(item1, container1);
+        this.freeGrid(item2, container2);
+
+        const w1 = item1.rotated ? ItemDatabase[item1.typeId].gridH : ItemDatabase[item1.typeId].gridW;
+        const h1 = item1.rotated ? ItemDatabase[item1.typeId].gridW : ItemDatabase[item1.typeId].gridH;
+        
+        const w2 = item2.rotated ? ItemDatabase[item2.typeId].gridH : ItemDatabase[item2.typeId].gridW;
+        const h2 = item2.rotated ? ItemDatabase[item2.typeId].gridW : ItemDatabase[item2.typeId].gridH;
+
+        // Check if both fit in each other's EXACT original positions
+        if (this.canPlaceItem(w1, h1, item2.x, item2.y, container2) && this.canPlaceItem(w2, h2, item1.x, item1.y, container1)) {
+            // Swap
+            let tempX = item1.x, tempY = item1.y, tempC = item1.container;
+            item1.x = item2.x; item1.y = item2.y; item1.container = item2.container;
+            item2.x = tempX; item2.y = tempY; item2.container = tempC;
+            
+            this.occupyGrid(item1, container2);
+            this.occupyGrid(item2, container1);
+            
+            if (item1.container === 'backpackSlot' || item2.container === 'backpackSlot') {
+                this.updateBackpackCapacity();
+            }
+            this.updatePlayerWeight();
+            return true;
+        }
+
+        // Revert
+        this.occupyGrid(item1, container1);
+        this.occupyGrid(item2, container2);
+        return false;
+    }
+
+    getOverlappingItem(w, h, x, y, containerName, ignoreItemId) {
+        const container = this[containerName];
+        if (!container || !container.slots) return null;
+        if (x < 0 || y < 0 || x + w > container.w || y + h > container.h) return null;
+
+        let foundIds = new Set();
+        for (let iy = y; iy < y + h; iy++) {
+            for (let ix = x; ix < x + w; ix++) {
+                const cell = container.slots[iy][ix];
+                if (cell !== null && cell !== ignoreItemId) {
+                    foundIds.add(cell);
+                }
+            }
+        }
+        
+        // If there's exactly one uniquely overlapping item, return it
+        if (foundIds.size === 1) {
+            return Array.from(foundIds)[0];
+        }
+        return null;
+    }
+
     updateBackpackCapacity() {
         // Destroy items inside if backpack removed? For now just capacity reset
         const bpItem = this.items.find(i => i.container === 'backpackSlot');

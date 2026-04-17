@@ -29,6 +29,23 @@ wss.on('connection', (ws) => {
             const data = JSON.parse(message);
             if (data.type === 'input') {
                 sim.applyInput(playerId, data);
+            } else if (data.type === 'resetPlayer') {
+                const p = sim.state.players[playerId];
+                if (p) {
+                    p.x = 2000;
+                    p.y = 2000;
+                    p.health = 100;
+                    p.isDead = false;
+                    p.won = false;
+                    p.isBleeding = false;
+                    p.isHeavyBleeding = false;
+                    p.hasHeadInjury = false; p.hasTorsoInjury = false;
+                    p.pkActiveTime = 0; p.isHealing = false; p.isReloading = false;
+                    p.reloadTimer = 0; p.adrenalineTimer = 0; p.strengthTimer = 0; p.weightlessTimer = 0;
+                    p.isGassed = false; p.healOverRate = 0;
+                    p.isExtracting = false; p.extractionTimer = 10.0;
+                    if (p.inventory && p.isDead) p.inventory.clearOnDeath(); // in case it missed
+                }
             }
         } catch (e) {
             console.error('Invalid WS message', e);

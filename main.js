@@ -121,9 +121,16 @@ class Game {
                 if(this.ui) this.ui.player = this.player;
                 if(this.ui) this.ui.inventory = this.inventory;
             } else if (msg.type === 'state') {
+                let wasDead = this.player ? this.player.isDead : false;
+                let wasWon = this.player ? this.player.won : false;
+                
                 this.sim.importState(msg.data);
-                // Ensure inventory UI checks re-bind if raw data wiped instance
+                
                 this.player = this.sim.state.players[this.localPlayerId];
+                if (!wasDead && this.player && this.player.isDead) this.sim.events.playerDied = true;
+                if (!wasWon && this.player && this.player.won) this.sim.events.playerWon = true;
+
+                // Ensure inventory UI checks re-bind if raw data wiped instance
                 if (this.sim.events.inventoryDirty && this.ui) {
                     this.ui.refreshInventory();
                     this.sim.events.inventoryDirty = false;
@@ -363,6 +370,7 @@ class Game {
         }
     }
 
+
     switchWeapon(slotNumber) {
         if (this.player.isDead || this.player.won || this.isInMenu || this.player.isReloading || this.player.isHealing) return;
 
@@ -457,8 +465,14 @@ class Game {
     }
 
     resetSession() {
-        this.sim.resetSession(); if(this.isMultiplayer) {
-            // Tell server to reset? For now just UI
+        this.sim.resetSession(); 
+        if(this.isMultiplayer) {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({
+                    type: 'resetPlayer',
+                    playerId: this.localPlayerId
+                }));
+            }
         }
     }
 
@@ -890,10 +904,6 @@ class Game {
         if (dbItem.effectType === 'smoke') r = 200;
         else if (dbItem.effectType === 'gas') r = 180;
 
-        let worldTargetX = this.cameraX + this.input.mouseX; // Simple mapping, assume camera isn't complex
-        let worldTargetY = this.cameraY + this.input.mouseY;
-
-        // As standard 2D topdown centering: target = playerPos + (mouseX - screenW/2)
         let dx = this.input.mouseX - (this.canvas.width / 2);
         let dy = this.input.mouseY - (this.canvas.height / 2);
 
@@ -908,16 +918,21 @@ class Game {
         let finalX = this.player.x + dx;
         let finalY = this.player.y + dy;
 
-        this.effects.push({
-            type: dbItem.effectType,
+        let throwData = {
+            effectType: dbItem.effectType,
             x: finalX,
             y: finalY,
-            timer: (dbItem.duration / 1000) || 0,
-            fuse: (dbItem.fuseTime / 1000) || 0,
+            duration: dbItem.duration || 0,
+            fuseTime: dbItem.fuseTime || 0,
             damage: dbItem.damage || 0,
-            radius: r,
-            active: false
-        });
+            radius: r
+        };
+
+        if (this.isMultiplayer && this.ws && this.ws.readyState === 1) {
+            this.ws.send(JSON.stringify({ type: 'input', playerId: this.localPlayerId, throw: throwData }));
+        } else {
+            this.sim.applyInput(this.localPlayerId, { throw: throwData });
+        }
 
         const msg = document.createElement('div');
         msg.innerText = "投擲了 " + dbItem.name;

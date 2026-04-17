@@ -111,6 +111,9 @@ export class GameSimulation {
         if (input.shoot !== undefined) {
             p.input.isShooting = input.shoot;
         }
+        if (input.throw) {
+            this.spawnEffect(id, input.throw);
+        }
     }
 
     exportState() {
@@ -439,6 +442,27 @@ export class GameSimulation {
                 }
             }
         }
+    }
+
+    spawnEffect(playerId, throwData) {
+        const p = this.state.players[playerId];
+        if (!p || p.isDead || p.won) return;
+        
+        let r = 150;
+        if (throwData.effectType === 'smoke') r = 200;
+        else if (throwData.effectType === 'gas') r = 180;
+
+        let fx = {
+            x: throwData.x,
+            y: throwData.y,
+            type: throwData.effectType,
+            fuse: throwData.fuseTime ? (throwData.fuseTime / 1000) : 0,
+            timer: throwData.duration ? (throwData.duration / 1000) : 5, 
+            radius: r,
+            active: false,
+            damage: throwData.damage || 0
+        };
+        this.state.effects.push(fx);
     }
 
     updateEffects(p, dt) {
