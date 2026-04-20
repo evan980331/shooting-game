@@ -17,8 +17,20 @@ export class GameSimulation {
             bullets: [],
             bots: [],
             effects: [],
+            grass: [],
             time: 0
         };
+
+        // Initialize Grass (many small bushes)
+        for (let i = 0; i < 60; i++) {
+            this.state.grass.push({
+                x: 100 + MathUtils.seededRandom() * 3800,
+                y: 100 + MathUtils.seededRandom() * 3800,
+                w: 40 + MathUtils.seededRandom() * 40,
+                h: 40 + MathUtils.seededRandom() * 40,
+                type: 'bush'
+            });
+        }
 
         this.walls = [
             // Outer limits (4000x4000)
@@ -26,14 +38,34 @@ export class GameSimulation {
             { x: 2000, y: 4020, w: 4040, h: 40, color: [0.3, 0.3, 0.3, 1] },
             { x: -20, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
             { x: 4020, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
-            // Inner obstacles
-            { x: 1800, y: 1850, w: 300, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 1800, y: 2150, w: 300, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 2200, y: 2000, w: 40, h: 300, color: [0.5, 0.5, 0.5, 1] }
+            // Inner obstacles (Dividers)
+            { x: 1000, y: 1000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
+            { x: 3000, y: 1000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
+            { x: 1000, y: 3000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
+            { x: 3000, y: 3000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
+            { x: 2000, y: 1500, w: 40, h: 800, color: [0.4, 0.4, 0.4, 1] },
+            { x: 2000, y: 2500, w: 40, h: 800, color: [0.4, 0.4, 0.4, 1] },
+            { x: 1500, y: 2000, w: 800, h: 40, color: [0.4, 0.4, 0.4, 1] },
+            { x: 2500, y: 2000, w: 800, h: 40, color: [0.4, 0.4, 0.4, 1] },
+            { x: 500, y: 2000, w: 40, h: 1000, color: [0.5, 0.5, 0.5, 1] },
+            { x: 3500, y: 2000, w: 40, h: 1000, color: [0.5, 0.5, 0.5, 1] },
+            { x: 2000, y: 500, w: 1000, h: 40, color: [0.5, 0.5, 0.5, 1] },
+            { x: 2000, y: 3500, w: 1000, h: 40, color: [0.5, 0.5, 0.5, 1] }
+        ];
+
+        this.spawnPoints = [
+            { x: 400, y: 400, name: 'TL' },
+            { x: 3600, y: 400, name: 'TR' },
+            { x: 400, y: 3600, name: 'BL' },
+            { x: 3600, y: 3600, name: 'BR' },
+            { x: 2000, y: 2000, name: 'C' }
         ];
 
         this.extractionZones = [
-            { x: 2300, y: 1800, w: 200, h: 200, color: [0, 1, 0, 0.3] }
+            { x: 300, y: 300, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'TL_EXIT' },
+            { x: 3700, y: 300, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'TR_EXIT' },
+            { x: 300, y: 3700, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
+            { x: 3700, y: 3700, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'BR_EXIT' }
         ];
 
         this.isInMenu = false;
@@ -59,7 +91,7 @@ export class GameSimulation {
             id: id,
             x: 2000,
             y: 2000,
-            size: 30, // radius/size
+            size: 30,
             rotation: 0,
             health: 100,
             isBleeding: false,
@@ -72,24 +104,38 @@ export class GameSimulation {
             reloadTimer: 0,
             healOverRate: 0,
             weight: 0,
-            baseSpeed: 200, // units per second
-            color: [0, 0.5, 1, 1], // Blue
+            baseSpeed: 200,
+            color: [0.1, 0.6, 1, 1],
             isDead: false,
             isExtracting: false,
-            extractionTimer: 10.0, // seconds
+            extractionTimer: 10.0,
             won: false,
             visualJitter: 0,
             recoilOffset: { x: 0, y: 0 },
             cameraZoom: 1.5,
-            
             // Internal state
             consecutiveShots: 0,
             lastShotTime: 0,
             shootTimer: 0,
+            money: 100000,
             input: { moveX: 0, moveY: 0, isShooting: false },
-            inventory: null
+            inventory: null,
+            targetExitName: '' 
         };
         const p = this.state.players[id];
+
+        // Assign spawn point and exit zone (TL -> BL, etc.)
+        const spawnIdx = Math.floor(MathUtils.seededRandom() * this.spawnPoints.length);
+        const spawn = this.spawnPoints[spawnIdx];
+        p.x = spawn.x;
+        p.y = spawn.y;
+        
+        if (spawn.name === 'TL') p.targetExitName = 'BL_EXIT';
+        else if (spawn.name === 'TR') p.targetExitName = 'BR_EXIT';
+        else if (spawn.name === 'BL') p.targetExitName = 'TL_EXIT';
+        else if (spawn.name === 'BR') p.targetExitName = 'TR_EXIT';
+        else p.targetExitName = MathUtils.seededRandom() > 0.5 ? 'TR_EXIT' : 'BL_EXIT';
+
         p.inventory = new InventorySystem(p);
         return p;
     }
@@ -122,7 +168,8 @@ export class GameSimulation {
             players: {},
             bullets: this.state.bullets,
             bots: this.state.bots,
-            effects: this.state.effects
+            effects: this.state.effects,
+            grass: this.state.grass
         };
         for (let id in this.state.players) {
             const p = this.state.players[id];
@@ -134,7 +181,7 @@ export class GameSimulation {
                 pkActiveTime: p.pkActiveTime, isHealing: p.isHealing, isReloading: p.isReloading,
                 adrenalineTimer: p.adrenalineTimer, strengthTimer: p.strengthTimer, weightlessTimer: p.weightlessTimer,
                 isDead: p.isDead, isExtracting: p.isExtracting, extractionTimer: p.extractionTimer, won: p.won,
-                color: p.color,
+                color: p.color, money: p.money, targetExitName: p.targetExitName,
                 inventory: {
                     items: p.inventory.items,
                     backpack: p.inventory.backpack
@@ -150,6 +197,7 @@ export class GameSimulation {
         this.state.bullets = parsed.bullets;
         this.state.bots = parsed.bots;
         this.state.effects = parsed.effects;
+        this.state.grass = parsed.grass || [];
         
         for (let id in parsed.players) {
             if (!this.state.players[id]) this.addPlayer(id);
@@ -518,6 +566,9 @@ export class GameSimulation {
         const playerRect = { x: p.x, y: p.y, w: p.size, h: p.size };
         let inZone = false;
         for (let z of this.extractionZones) {
+            // Only allow designated exit
+            if (p.targetExitName && z.name !== p.targetExitName) continue;
+            
             if (this.AABBIntersect(playerRect, z)) {
                 inZone = true;
                 break;

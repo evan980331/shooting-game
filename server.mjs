@@ -14,9 +14,7 @@ wss.on('connection', (ws) => {
     console.log(`[Server] Player connected: ${playerId}`);
     
     // Create player in simulation
-    const p = sim.addPlayer(playerId);
-    p.x += (Math.random() - 0.5) * 100; // Slight spawn offset
-    p.y += (Math.random() - 0.5) * 100;
+    sim.addPlayer(playerId);
 
     // Send initial Handshake
     ws.send(JSON.stringify({
@@ -32,19 +30,9 @@ wss.on('connection', (ws) => {
             } else if (data.type === 'resetPlayer') {
                 const p = sim.state.players[playerId];
                 if (p) {
-                    p.x = 2000;
-                    p.y = 2000;
-                    p.health = 100;
-                    p.isDead = false;
-                    p.won = false;
-                    p.isBleeding = false;
-                    p.isHeavyBleeding = false;
-                    p.hasHeadInjury = false; p.hasTorsoInjury = false;
-                    p.pkActiveTime = 0; p.isHealing = false; p.isReloading = false;
-                    p.reloadTimer = 0; p.adrenalineTimer = 0; p.strengthTimer = 0; p.weightlessTimer = 0;
-                    p.isGassed = false; p.healOverRate = 0;
-                    p.isExtracting = false; p.extractionTimer = 10.0;
-                    if (p.inventory && p.isDead) p.inventory.clearOnDeath(); // in case it missed
+                    sim.removePlayer(playerId);
+                    sim.addPlayer(playerId);
+                    if (p.inventory) p.inventory.clearOnDeath(); 
                 }
             }
         } catch (e) {

@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=8.1';
-import { UIManager } from './ui.js?v=8.1';
-import { ItemDatabase, EconomyRules } from './db.js?v=8.1';
-import { GameSimulation } from './game_simulation.js?v=8.1';
+import { InventorySystem } from './inventory.js?v=9.0';
+import { UIManager } from './ui.js?v=9.0';
+import { ItemDatabase, EconomyRules } from './db.js?v=9.0';
+import { GameSimulation } from './game_simulation.js?v=9.0';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -68,6 +68,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
 class Game {
     constructor() {
+        console.log("%c [GAME] Version 9.0 Initializing... ", "background: #000; color: #00ffaa; font-weight: bold;");
         this.canvas = document.getElementById('game-canvas');
         this.ctx = null;
         this.device = null;
@@ -101,6 +102,10 @@ class Game {
 
         this.bindEvents();
         this.connectServer();
+
+        // Ensure camera starts correctly focused even before first update
+        this.cameraX = this.player.x - this.canvas.width / 2;
+        this.cameraY = this.player.y - this.canvas.height / 2;
     }
 
     connectServer() {
@@ -293,9 +298,27 @@ class Game {
 
         this.updateHUD(); // Initial HUD
 
+        // Write initial camera state
+        this.writeCameraUniforms();
+
         // Start loop
         requestAnimationFrame((t) => this.loop(t));
         return true;
+    }
+
+    writeCameraUniforms() {
+        if (!this.device || !this.uniformBuffer) return;
+        const zoom = (this.player && this.player.cameraZoom && !isNaN(this.player.cameraZoom)) ? this.player.cameraZoom : 1.5;
+        const virtualWidth = this.canvas.width * zoom;
+        const virtualHeight = this.canvas.height * zoom;
+        
+        const cx = isNaN(this.cameraX) ? 0 : this.cameraX;
+        const cy = isNaN(this.cameraY) ? 0 : this.cameraY;
+
+        this.device.queue.writeBuffer(
+            this.uniformBuffer, 0,
+            new Float32Array([virtualWidth, virtualHeight, cx, cy])
+        );
     }
 
     showError(msg) {
@@ -451,15 +474,17 @@ class Game {
         if (this.player.isDead || this.player.won || this.isInMenu) return;
 
         // Visual Jitter/Recoil handling (syncing local state from sim state)
-        const virtualWidth = this.canvas.width * this.player.cameraZoom;
-        const virtualHeight = this.canvas.height * this.player.cameraZoom;
-        this.cameraX = (this.player.x + this.player.recoilOffset.x) - virtualWidth / 2;
-        this.cameraY = (this.player.y + this.player.recoilOffset.y) - virtualHeight / 2;
+        const zoom = (this.player.cameraZoom && !isNaN(this.player.cameraZoom)) ? this.player.cameraZoom : 1.5;
+        const virtualWidth = this.canvas.width * zoom;
+        const virtualHeight = this.canvas.height * zoom;
 
-        this.device.queue.writeBuffer(
-            this.uniformBuffer, 0,
-            new Float32Array([virtualWidth, virtualHeight, this.cameraX, this.cameraY])
-        );
+        const rx = (this.player.recoilOffset && !isNaN(this.player.recoilOffset.x)) ? this.player.recoilOffset.x : 0;
+        const ry = (this.player.recoilOffset && !isNaN(this.player.recoilOffset.y)) ? this.player.recoilOffset.y : 0;
+
+        this.cameraX = (this.player.x + rx) - virtualWidth / 2;
+        this.cameraY = (this.player.y + ry) - virtualHeight / 2;
+
+        this.writeCameraUniforms();
 
         this.updateHUD();
     }
@@ -756,6 +781,16 @@ class Game {
             this.renderInstances.push({
                 x: b.x, y: b.y, w: 10, h: 4, rot: b.rot, color: [1, 1, 0, 1], shapeType: 0.0, originX: 0, originY: 0
             });
+        }
+
+        // Grass/Bushes (New)
+        if (this.sim.state.grass) {
+            for (let g of this.sim.state.grass) {
+                this.renderInstances.push({
+                    x: g.x, y: g.y, w: g.w, h: g.h,
+                    rot: 0, color: [0.1, 0.45, 0.1, 0.7], shapeType: 1.0, originX: 0, originY: 0
+                });
+            }
         }
 
         // Zones

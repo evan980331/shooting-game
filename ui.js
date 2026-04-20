@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=8.3';
+import { ItemDatabase, EconomyRules } from './db.js?v=9.0';
 
 export class UIManager {
     constructor(game) {
@@ -596,7 +596,8 @@ export class UIManager {
         const categoriesContainerId = isOverlay ? 'overlay-shop-categories' : 'shop-categories';
         const categoriesContainer = document.getElementById(categoriesContainerId);
 
-        if (curMoneyText) curMoneyText.innerText = this.inv.player.money;
+        const money = (this.inv && this.inv.player && this.inv.player.money !== undefined) ? this.inv.player.money : 0;
+        if (curMoneyText) curMoneyText.innerText = money;
         if (curItemsContainer) {
             curItemsContainer.innerHTML = '';
             curItemsContainer.style.display = 'flex';
@@ -609,8 +610,12 @@ export class UIManager {
         }
 
         const categories = {};
-        for (let catName in EconomyRules.shopCategories) {
-            categories[catName] = [];
+        if (EconomyRules && EconomyRules.shopCategories) {
+            for (let catName in EconomyRules.shopCategories) {
+                categories[catName] = [];
+            }
+        } else {
+            console.error('[UIManager] EconomyRules.shopCategories is MISSING!');
         }
 
         if (!this.currentShopCategory || !(this.currentShopCategory in categories)) {
