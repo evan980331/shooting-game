@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=9.0';
-import { UIManager } from './ui.js?v=9.0';
-import { ItemDatabase, EconomyRules } from './db.js?v=9.0';
-import { GameSimulation } from './game_simulation.js?v=9.0';
+import { InventorySystem } from './inventory.js?v=1777572179049';
+import { UIManager } from './ui.js?v=1777572179049';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777572179049';
+import { GameSimulation } from './game_simulation.js?v=1777572179049';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -74,6 +74,7 @@ class Game {
         this.device = null;
 
         this.sim = new GameSimulation();
+        this.sim.isInMenu = true;
         this.localPlayerId = 'singleplayer'; // Fallback / Local mode
         this.sim.addPlayer(this.localPlayerId);
         
@@ -209,7 +210,7 @@ class Game {
         this.device.queue.writeBuffer(this.vertexBuffer, 0, vertexData);
 
         // Max 1000 instances
-        this.maxInstances = 1000;
+        this.maxInstances = 100000;
         this.instanceDataSize = (2 + 2 + 4 + 1 + 1 + 2 + 0) * 4; // pos(2)+size(2)+col(4)+rot(1)+shapeType(1)+originOffset(2) = 12 floats = 48 bytes
 
         this.instanceBuffer = this.device.createBuffer({

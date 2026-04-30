@@ -36,7 +36,7 @@ export const ItemDatabase = {
     "G18": { name: "G18", weaponClass: "手槍", type: "weapon", ammoType: "小口徑", maxAmmoTier: 3, price: 500, weight: 1, stats: { damage: 11, fireRate: 100, recoil: 50, accuracy: 50, range: 30, velocity: 45, magSize: 20, upMagSize: 30, upMagPrice: 1000, reloadMult: 1.1 }, gridW: 1, gridH: 2 },
 
     // === Melee ===
-    "刀": { name: "刀", weaponClass: "近戰", type: "melee", price: 1000, weight: 0.5, stats: { damage: 25, fireRate: 50, recoil: 0, accuracy: 100, range: 2, velocity: 0, magSize: null }, gridW: 1, gridH: 2 },
+    "刀": { name: "刀", weaponClass: "近戰", type: "melee", price: 0, weight: 0.5, stats: { damage: 25, fireRate: 50, recoil: 0, accuracy: 100, range: 2, velocity: 0, magSize: null }, gridW: 1, gridH: 2 },
 
     // === Armor (Body) ===
     "金甲": { name: "金甲", type: "armor", level: 4, price: 5000, weight: 12, gridW: 3, gridH: 3, maxDurability: 70, damageReduction: 0.50 },
@@ -191,14 +191,14 @@ export const EconomyRules = {
     repairCostGoldArmor: 4000,
 
     shopCategories: {
-        "武器": (item) => item.type === 'weapon',
-        "近戰": (item) => item.type === 'melee',
-        "護甲": (item) => item.type === 'armor' || item.type === 'helmet',
-        "背包": (item) => item.type === 'backpack',
-        "醫療": (item) => item.type === 'medical' || item.type === 'medical-buff',
-        "投擲物": (item) => item.type === 'throwable',
-        "修理套件": (item) => item.type === 'repair',
-        "子彈": (item) => item.type === 'ammo',
-        "其他": (item) => item.type === 'secure',
+        '槍械': (item) => item.type === 'weapon',
+        '近戰': (item) => item.type === 'melee',
+        '護甲': (item) => item.type === 'armor' || item.type === 'helmet',
+        '背包': (item) => item.type === 'backpack',
+        '醫療': (item) => item.type === 'medical' || item.type === 'medical-buff',
+        '投擲物': (item) => item.type === 'throwable',
+        '維修配件': (item) => item.type === 'repair',
+        '子彈': (item) => item.type === 'ammo',
+        '保險箱': (item) => item.type === 'secure',
     }
 };

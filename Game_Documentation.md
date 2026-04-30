@@ -420,3 +420,10 @@
 ## 專案連結
 - **GitHub 儲存庫**：[https://github.com/evan980331/shooting-game](https://github.com/evan980331/shooting-game)
 - **Vercel 預覽網址**：[https://shooting-game-2d.vercel.app]
+
+
+### Recent Updates (2026-05-01)
+- Removed Knife (刀) from the shop purchase list by setting its price to 0.
+- Fixed a UI bug where weapon subcategories would persist incorrectly when switching to other categories like Medical or Armor.
+- Fixed an issue where the shop category UI failed to render in the lobby due to incorrect initialization of the isInMenu state.
+- Applied cache-busting to ensure all frontend files reflect the latest updates.

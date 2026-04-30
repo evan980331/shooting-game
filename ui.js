@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=9.0';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777572179049';
 
 export class UIManager {
     constructor(game) {
@@ -590,10 +590,10 @@ export class UIManager {
     }
 
     refreshShop() {
-        const isOverlay = !this.game.isInMenu;
+        const isOverlay = !this.game.isInMenu; console.log('isOverlay:', isOverlay, 'isInMenu:', this.game.isInMenu);
         const curItemsContainer = isOverlay ? this.overlayShopItems : this.shopItems;
         const curMoneyText = isOverlay ? this.overlayShopMoney : this.shopMoney;
-        const categoriesContainerId = isOverlay ? 'overlay-shop-categories' : 'shop-categories';
+                const categoriesContainerId = isOverlay ? 'overlay-shop-categories' : 'shop-categories';
         const categoriesContainer = document.getElementById(categoriesContainerId);
 
         const money = (this.inv && this.inv.player && this.inv.player.money !== undefined) ? this.inv.player.money : 0;
@@ -661,7 +661,7 @@ export class UIManager {
         }
 
         let activeCategoryItems = categories[this.currentShopCategory] || [];
-        const isWeaponTab = this.currentShopCategory === '武器';
+        const isWeaponTab = this.currentShopCategory === '槍械';
 
         if (isWeaponTab && curItemsContainer) {
             const weaponClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.weaponClass || '其他'))];
@@ -688,7 +688,7 @@ export class UIManager {
                 activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.weaponClass || '其他') === this.currentWeaponSubCat);
             }
         } else if (this.currentShopCategory === '子彈' && curItemsContainer) {
-            const ammoClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.ammoClass || '特殊'))];
+            const ammoClasses = ['全部', ...new Set(activeCategoryItems.map(({ item }) => item.ammoClass || '未知'))];
             if (!this.ammoClassSubCat || !ammoClasses.includes(this.ammoClassSubCat)) this.ammoClassSubCat = '全部';
 
             let subBarId = isOverlay ? 'overlay-weapon-subcat-bar' : 'lobby-weapon-subcat-bar';
@@ -718,14 +718,25 @@ export class UIManager {
             });
 
             if (this.ammoClassSubCat !== '全部') {
-                activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.ammoClass || '特殊') === this.ammoClassSubCat);
+                activeCategoryItems = activeCategoryItems.filter(({ item }) => (item.ammoClass || '未知') === this.ammoClassSubCat);
             }
         } else {
-            const subBar = document.getElementById('weapon-subcat-bar');
+            let subBarId = isOverlay ? 'overlay-weapon-subcat-bar' : 'lobby-weapon-subcat-bar';
+            const subBar = document.getElementById(subBarId);
             if (subBar) subBar.remove();
             this.currentWeaponSubCat = '全部';
         }
 
+        
+        activeCategoryItems.sort((a, b) => {
+            if (this.currentShopCategory === '子彈') {
+                const tierA = a.item.tier || 0;
+                const tierB = b.item.tier || 0;
+                if (tierA !== tierB) return tierA - tierB;
+            }
+            return (a.item.price || 0) - (b.item.price || 0);
+        });
+        
         activeCategoryItems.forEach(({ key, item }) => {
                 const div = document.createElement('div');
                 div.className = 'shop-item';

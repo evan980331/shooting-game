@@ -1,5 +1,5 @@
-import { InventorySystem } from './inventory.js?v=6.9';
-import { ItemDatabase } from './db.js?v=7.0';
+import { InventorySystem } from './inventory.js?v=1777572179049';
+import { ItemDatabase } from './db.js?v=1777572179049';
 
 export class MathUtils {
     static seed = 1234567;
