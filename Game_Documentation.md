@@ -427,3 +427,11 @@
 - Fixed a UI bug where weapon subcategories would persist incorrectly when switching to other categories like Medical or Armor.
 - Fixed an issue where the shop category UI failed to render in the lobby due to incorrect initialization of the isInMenu state.
 - Applied cache-busting to ensure all frontend files reflect the latest updates.
+
+### 2026/05/01 - 渲染管線與 UI 穩定化 (v9.1)
+- **Raid 黑屏修復 (WebGPU Pipeline)**：
+  - 修復了進入戰局時因 `updateHUD` 呼叫 `getSpeedMultiplier` 未傳遞 Player 物件所造成的 `TypeError`，該惡性錯誤原先會導致 WebGPU 渲染迴圈及 UI 更新計時器同步崩潰，進而產生完全黑屏。
+  - 修正了 `main.js` 中的 `getSpeedMultiplier` 參數傳遞，使環境、物件與玩家能順利推入渲染實例 (Render Instances) 陣列中。
+- **除錯腳本清理**：
+  - 移除了調查渲染管線期間於 `index.html` 與 `main.js` 中注入的強制 UI 覆蓋 (`#error-msg`) 與除錯追蹤程式碼。
+  - 清理舊有的 `v=...` 快取字串強制更新機制，還原為標準腳本載入流程。

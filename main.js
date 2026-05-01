@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=1777572179049';
-import { UIManager } from './ui.js?v=1777572179049';
-import { ItemDatabase, EconomyRules } from './db.js?v=1777572179049';
-import { GameSimulation } from './game_simulation.js?v=1777572179049';
+import { InventorySystem } from './inventory.js?v=1777623847870';
+import { UIManager } from './ui.js?v=1777623847870';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777623847870';
+import { GameSimulation } from './game_simulation.js?v=1777623847870';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -302,8 +302,11 @@ class Game {
         // Write initial camera state
         this.writeCameraUniforms();
 
-        // Start loop
-        requestAnimationFrame((t) => this.loop(t));
+        console.log("CALLING rAF IN INIT");
+        requestAnimationFrame((t) => {
+            console.log("rAF CALLBACK FROM INIT FIRED!");
+            this.loop(t);
+        });
         return true;
     }
 
@@ -430,10 +433,11 @@ class Game {
     }
 
     getSpeedMultiplier() {
-        return this.sim.getSpeedMultiplier();
+        return this.sim.getSpeedMultiplier(this.player);
     }
 
     update(dt) {
+        if (!this.sim.input) this.sim.input = {};
         this.sim.input.canvasW = this.canvas.width * this.player.cameraZoom;
         this.sim.input.canvasH = this.canvas.height * this.player.cameraZoom;
         this.sim.update(dt, this.isInventoryOpen);
@@ -472,7 +476,7 @@ class Game {
             this.sim.events.inventoryDirty = false;
         }
 
-        if (this.player.isDead || this.player.won || this.isInMenu) return;
+        if (this.player.isDead || this.player.won || this.isInMenu) { if (!this._loggedEarly) { console.log("UPDATE RETURN EARLY:", this.player.isDead, this.player.won, this.isInMenu); this._loggedEarly = true; } return; }
 
         // Visual Jitter/Recoil handling (syncing local state from sim state)
         const zoom = (this.player.cameraZoom && !isNaN(this.player.cameraZoom)) ? this.player.cameraZoom : 1.5;
@@ -513,6 +517,12 @@ class Game {
         };
 
         setHtmlObj('health-text', Math.ceil(this.player.health));
+        
+        const errEl = document.getElementById('error-msg');
+        if (errEl) {
+            errEl.style.display = 'none';
+        }
+        
         setHtmlObj('weight-text', this.player.weight);
         setHtmlObj('speed-multiplier-text', this.getSpeedMultiplier().toFixed(2));
 
@@ -773,7 +783,7 @@ class Game {
         ctx.restore();
     }
 
-    render() {
+    render() { if (!this._loggedRender) { console.log("RENDER CALLED", this.renderInstances ? this.renderInstances.length : -1); this._loggedRender = true; }
         // Collect instances to draw
         this.renderInstances = [];
 
@@ -910,9 +920,18 @@ class Game {
 
         // Encode and submit commands
         const commandEncoder = this.device.createCommandEncoder();
+        
+        let textureView;
+        try {
+            textureView = this.ctx.getCurrentTexture().createView();
+        } catch (e) {
+            // Canvas might be hidden or 0-sized
+            return;
+        }
+
         const renderPass = commandEncoder.beginRenderPass({
             colorAttachments: [{
-                view: this.ctx.getCurrentTexture().createView(),
+                view: textureView,
                 clearValue: { r: 0.1, g: 0.1, b: 0.1, a: 1.0 },
                 loadOp: 'clear',
                 storeOp: 'store'
@@ -1288,13 +1307,34 @@ class Game {
     }
 
     loop(time) {
-        const dt = (time - this.lastTime) / 1000.0;
-        this.lastTime = time;
+        if (!this._loggedLoopStarted) { console.log('LOOP STARTED'); this._loggedLoopStarted = true; }
+        try {
+            const dt = (time - this.lastTime) / 1000.0;
+            this.lastTime = time;
 
-        this.update(dt);
-        this.render();
+            this.update(dt);
+            this.render();
 
-        requestAnimationFrame((t) => this.loop(t));
+            requestAnimationFrame((t) => this.loop(t));
+        } catch (e) {
+            console.error("CRITICAL LOOP ERROR:", e);
+            const errEl = document.getElementById('error-msg');
+            if (errEl) {
+                errEl.innerText = "CRITICAL LOOP ERROR: " + e.message;
+                errEl.style.display = 'block';
+                errEl.style.zIndex = '999999';
+                errEl.style.color = 'white';
+                errEl.style.background = 'red';
+                errEl.style.fontSize = '16px';
+                errEl.style.padding = '10px';
+                errEl.style.position = 'absolute';
+                errEl.style.top = '10%';
+                errEl.style.left = '50%';
+                errEl.style.transform = 'translateX(-50%)';
+            }
+        } finally {
+            requestAnimationFrame((t) => this.loop(t));
+        }
     }
 }
 

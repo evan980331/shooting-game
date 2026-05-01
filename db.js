@@ -192,7 +192,6 @@ export const EconomyRules = {
 
     shopCategories: {
         '槍械': (item) => item.type === 'weapon',
-        '近戰': (item) => item.type === 'melee',
         '護甲': (item) => item.type === 'armor' || item.type === 'helmet',
         '背包': (item) => item.type === 'backpack',
         '醫療': (item) => item.type === 'medical' || item.type === 'medical-buff',
