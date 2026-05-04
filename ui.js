@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1777901105736';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
 
 export class UIManager {
     constructor(game) {
@@ -250,18 +250,37 @@ export class UIManager {
             if (!wasActive && quickClickId && this.attachedItemId === null) {
                 const qItem = this.inv.items.find(i => i.id === quickClickId);
                 // If item is not in stash, move it to stash
-                if (qItem && qItem.container !== 'stash') {
-                    const dbItem = ItemDatabase[qItem.typeId];
-                    const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.stash);
-                    if (slot) {
-                        const res = this.inv.moveItem(qItem.id, 'stash', slot.x, slot.y, slot.rotated);
-                        if (res && res.success) {
-                            this.refreshInventory();
-                            this.game.updateHUD();
+                if (qItem) {
+                    const inMenu = this.game.isInMenu;
+                    if (inMenu && qItem.container !== 'stash') {
+                        const dbItem = ItemDatabase[qItem.typeId];
+                        const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.stash);
+                        if (slot) {
+                            const res = this.inv.moveItem(qItem.id, 'stash', slot.x, slot.y, slot.rotated);
+                            if (res && res.success) {
+                                this.refreshInventory();
+                                this.game.updateHUD();
+                            }
+                        } else {
+                            this._showQuickEquipError("倉庫空間不足，無法自動移入");
                         }
-                    } else {
-                        // Notify user stash is full?
-                        this._showQuickEquipError("倉庫空間不足，無法自動移入");
+                    } else if (!inMenu && qItem.container !== 'backpack' && qItem.container !== 'secureContainer' && qItem.container !== 'hotbarSlot') {
+                        const dbItem = ItemDatabase[qItem.typeId];
+                        const hasBackpack = this.inv.items.find(i => i.container === 'backpackSlot');
+                        if (!hasBackpack) {
+                            this._showQuickEquipError("沒有裝備背包，無法快速卸裝");
+                            return;
+                        }
+                        const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.backpack);
+                        if (slot) {
+                            const res = this.inv.moveItem(qItem.id, 'backpack', slot.x, slot.y, slot.rotated);
+                            if (res && res.success) {
+                                this.refreshInventory();
+                                this.game.updateHUD();
+                            }
+                        } else {
+                            this._showQuickEquipError("背包空間不足");
+                        }
                     }
                     return;
                 }

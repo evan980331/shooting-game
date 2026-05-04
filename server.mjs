@@ -1,5 +1,5 @@
 import { WebSocketServer } from 'ws';
-import { GameSimulation } from './game_simulation.js?v=1777901105736';
+import { GameSimulation } from './game_simulation.js?v=1777904933763';
 
 const wss = new WebSocketServer({ port: 8081 });
 const sim = new GameSimulation();

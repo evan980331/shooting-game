@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=1777901105736';
-import { UIManager } from './ui.js?v=1777901105736';
-import { ItemDatabase, EconomyRules } from './db.js?v=1777901105736';
-import { GameSimulation } from './game_simulation.js?v=1777901105736';
+import { InventorySystem } from './inventory.js?v=1777904933763';
+import { UIManager } from './ui.js?v=1777904933763';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
+import { GameSimulation } from './game_simulation.js?v=1777904933763';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -359,6 +359,21 @@ class Game {
         const minimapCanvas = document.getElementById('minimap-canvas');
         if (minimapCanvas) {
             this.minimapCtx = minimapCanvas.getContext('2d');
+            minimapCanvas.style.cursor = 'pointer';
+            minimapCanvas.addEventListener('click', () => {
+                if (this.isInMenu) return;
+                const overlay = document.getElementById('fullmap-overlay');
+                if (overlay) {
+                    overlay.classList.remove('hidden');
+                    this.renderFullMap();
+                }
+            });
+        }
+        const fullmapOverlay = document.getElementById('fullmap-overlay');
+        if (fullmapOverlay) {
+            fullmapOverlay.addEventListener('click', () => {
+                fullmapOverlay.classList.add('hidden');
+            });
         }
 
         // Add some click interactions to test health/bleeding for debugging easily
@@ -372,6 +387,18 @@ class Game {
     }
 
     handleKey(key, state) {
+        if (key === 'm' && state === true && !this.isInMenu) {
+            const overlay = document.getElementById('fullmap-overlay');
+            if (overlay) {
+                if (overlay.classList.contains('hidden')) {
+                    overlay.classList.remove('hidden');
+                    this.renderFullMap();
+                } else {
+                    overlay.classList.add('hidden');
+                }
+            }
+        }
+        
         if (['w', 'a', 's', 'd'].includes(key)) {
             this.input[key] = state;
             
@@ -751,6 +778,48 @@ class Game {
         }
     }
 
+    renderFullMap() {
+        const fullCanvas = document.getElementById('fullmap-canvas');
+        if (!fullCanvas) return;
+        const ctx = fullCanvas.getContext('2d');
+        const mapSize = 8000;
+        const scale = fullCanvas.width / mapSize;
+
+        ctx.clearRect(0, 0, fullCanvas.width, fullCanvas.height);
+        
+        // Draw Walls
+        ctx.fillStyle = "rgba(100, 100, 100, 1)";
+        for (let w of this.walls) {
+            ctx.fillRect(w.x * scale, w.y * scale, w.w * scale, w.h * scale);
+        }
+
+        // Draw Player
+        if (this.player && !this.player.isDead) {
+            ctx.fillStyle = "rgba(0, 150, 255, 1)";
+            ctx.beginPath();
+            ctx.arc(this.player.x * scale, this.player.y * scale, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Direction indicator
+            ctx.strokeStyle = "rgba(255, 255, 0, 1)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(this.player.x * scale, this.player.y * scale);
+            ctx.lineTo((this.player.x + Math.cos(this.player.rotation) * 40) * scale, (this.player.y + Math.sin(this.player.rotation) * 40) * scale);
+            ctx.stroke();
+        }
+
+        // Draw Valid Exits
+        ctx.fillStyle = "rgba(0, 255, 100, 0.4)";
+        ctx.strokeStyle = "rgba(0, 255, 100, 1)";
+        ctx.lineWidth = 1;
+        for (let z of this.extractionZones) {
+            if (this.player && this.player.targetExitName && z.name !== this.player.targetExitName) continue;
+            ctx.fillRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
+            ctx.strokeRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
+        }
+    }
+
     renderMinimap() {
         if (!this.minimapCtx) return;
 
@@ -786,6 +855,7 @@ class Game {
         ctx.strokeStyle = "rgba(0, 255, 80, 1)";
         ctx.lineWidth = 1;
         for (let z of this.extractionZones) {
+            if (this.player.targetExitName && z.name !== this.player.targetExitName) continue;
             let dx = z.x - (this.player.x + this.player.recoilOffset.x);
             let dy = z.y - (this.player.y + this.player.recoilOffset.y);
             let zx = dx * finalScale - (z.w * finalScale) / 2;
@@ -836,6 +906,7 @@ class Game {
 
         // Zones
         for (let z of this.extractionZones) {
+            if (this.player.targetExitName && z.name !== this.player.targetExitName) continue;
             this.renderInstances.push({
                 x: z.x, y: z.y, w: z.w, h: z.h, rot: 0, color: z.color, shapeType: 0.0, originX: 0, originY: 0
             });

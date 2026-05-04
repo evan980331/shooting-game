@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1777901105736';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
 
 export class InventorySystem {
     constructor(playerRef) {

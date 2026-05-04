@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Map Editor</title>
+    <style>
+        body { background: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 1px solid #555; background: #111; cursor: crosshair; }
+        .controls { margin-bottom: 10px; display: flex; gap: 10px; }
+        textarea { width: 800px; height: 100px; background: #333; color: #fff; border: 1px solid #555; }
+    </style>
+</head>
+<body>
+    <h2>2D Top-down Shooter 地圖編輯器 (8000x8000)</h2>
+    <div class="controls">
+        <label>模式:
+            <select id="mode">
+                <option value="wall">畫牆壁 (Obstacle)</option>
+                <option value="spawn">放置生成點 (Spawn)</option>
+                <option value="exit">放置撤離點 (Exit)</option>
+            </select>
+        </label>
+        <button onclick="exportData()">匯出代碼 (Export)</button>
+        <button onclick="clearMap()">清除全部</button>
+    </div>
+    <canvas id="editor" width="800" height="800"></canvas>
+    <textarea id="output" readonly></textarea>
+
+    <script>
+        const canvas = document.getElementById('editor');
+        const ctx = canvas.getContext('2d');
+        const scale = 10; // 8000 map -> 800 canvas
+        
+        let walls = [];
+        let spawns = [];
+        let exits = [];
+
+        let isDrawing = false;
+        let startX = 0; let startY = 0;
+        let currentX = 0; let currentY = 0;
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            for(let i=0; i<=800; i+=100) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 800); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(800, i); ctx.stroke();
+            }
+
+            // Draw walls
+            ctx.fillStyle = 'rgba(120, 120, 120, 1)';
+            for(let w of walls) ctx.fillRect(w.x/scale, w.y/scale, w.w/scale, w.h/scale);
+
+            // Draw spawns
+            ctx.fillStyle = 'blue';
+            for(let s of spawns) {
+                ctx.beginPath(); ctx.arc(s.x/scale, s.y/scale, 5, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Draw exits
+            ctx.fillStyle = 'rgba(0, 255, 100, 0.5)';
+            for(let e of exits) ctx.fillRect(e.x/scale, e.y/scale, e.w/scale, e.h/scale);
+
+            // Draw current
+            if (isDrawing) {
+                const mode = document.getElementById('mode').value;
+                if (mode === 'wall') {
+                    ctx.fillStyle = 'rgba(120, 120, 120, 0.5)';
+                    ctx.fillRect(startX, startY, currentX - startX, currentY - startY);
+                } else if (mode === 'exit') {
+                    ctx.fillStyle = 'rgba(0, 255, 100, 0.3)';
+                    ctx.fillRect(startX, startY, currentX - startX, currentY - startY);
+                }
+            }
+        }
+
+        canvas.onmousedown = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+            isDrawing = true;
+        };
+
+        canvas.onmousemove = (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            currentX = e.clientX - rect.left;
+            currentY = e.clientY - rect.top;
+            draw();
+        };
+
+        canvas.onmouseup = (e) => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            const mode = document.getElementById('mode').value;
+            const rx = Math.min(startX, currentX) * scale;
+            const ry = Math.min(startY, currentY) * scale;
+            const rw = Math.abs(currentX - startX) * scale;
+            const rh = Math.abs(currentY - startY) * scale;
+
+            if (mode === 'wall') {
+                if (rw > 10 && rh > 10) walls.push({x: rx, y: ry, w: rw, h: rh, color: [0.5, 0.5, 0.5, 1]});
+            } else if (mode === 'exit') {
+                if (rw > 10 && rh > 10) exits.push({x: rx, y: ry, w: rw, h: rh, color: [0, 1, 0.5, 0.3], name: 'EXIT_' + exits.length});
+            } else if (mode === 'spawn') {
+                spawns.push({x: startX * scale, y: startY * scale, name: 'SPAWN_' + spawns.length});
+            }
+            draw();
+        };
+
+        window.exportData = () => {
+            let out = `this.walls = [\n  ${walls.map(w => `{ x: ${w.x}, y: ${w.y}, w: ${w.w}, h: ${w.h}, color: [0.5, 0.5, 0.5, 1] }`).join(',\n  ')}\n];\n\n`;
+            out += `this.spawnPoints = [\n  ${spawns.map(s => `{ x: ${s.x}, y: ${s.y}, name: '${s.name}' }`).join(',\n  ')}\n];\n\n`;
+            out += `this.extractionZones = [\n  ${exits.map(e => `{ x: ${e.x}, y: ${e.y}, w: ${e.w}, h: ${e.h}, color: [0, 1, 0.5, 0.3], name: '${e.name}' }`).join(',\n  ')}\n];`;
+            document.getElementById('output').value = out;
+        };
+
+        window.clearMap = () => { walls=[]; spawns=[]; exits=[]; draw(); };
+
+        draw();
+    </script>
+</body>
+</html>

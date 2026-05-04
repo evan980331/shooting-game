@@ -1,5 +1,5 @@
-import { InventorySystem } from './inventory.js?v=1777901105736';
-import { ItemDatabase } from './db.js?v=1777901105736';
+import { InventorySystem } from './inventory.js?v=1777904933763';
+import { ItemDatabase } from './db.js?v=1777904933763';
 
 export class MathUtils {
     static seed = 1234567;
@@ -22,10 +22,10 @@ export class GameSimulation {
         };
 
         // Initialize Grass (many small bushes)
-        for (let i = 0; i < 60; i++) {
+        for (let i = 0; i < 240; i++) {
             this.state.grass.push({
-                x: 100 + MathUtils.seededRandom() * 3800,
-                y: 100 + MathUtils.seededRandom() * 3800,
+                x: 200 + MathUtils.seededRandom() * 7600,
+                y: 200 + MathUtils.seededRandom() * 7600,
                 w: 40 + MathUtils.seededRandom() * 40,
                 h: 40 + MathUtils.seededRandom() * 40,
                 type: 'bush'
@@ -33,39 +33,39 @@ export class GameSimulation {
         }
 
         this.walls = [
-            // Outer limits (4000x4000)
-            { x: 2000, y: -20, w: 4040, h: 40, color: [0.3, 0.3, 0.3, 1] },
-            { x: 2000, y: 4020, w: 4040, h: 40, color: [0.3, 0.3, 0.3, 1] },
-            { x: -20, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
-            { x: 4020, y: 2000, w: 40, h: 4040, color: [0.3, 0.3, 0.3, 1] },
-            // Inner obstacles (Dividers)
-            { x: 1000, y: 1000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 3000, y: 1000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 1000, y: 3000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 3000, y: 3000, w: 600, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 2000, y: 1500, w: 40, h: 800, color: [0.4, 0.4, 0.4, 1] },
-            { x: 2000, y: 2500, w: 40, h: 800, color: [0.4, 0.4, 0.4, 1] },
-            { x: 1500, y: 2000, w: 800, h: 40, color: [0.4, 0.4, 0.4, 1] },
-            { x: 2500, y: 2000, w: 800, h: 40, color: [0.4, 0.4, 0.4, 1] },
-            { x: 500, y: 2000, w: 40, h: 1000, color: [0.5, 0.5, 0.5, 1] },
-            { x: 3500, y: 2000, w: 40, h: 1000, color: [0.5, 0.5, 0.5, 1] },
-            { x: 2000, y: 500, w: 1000, h: 40, color: [0.5, 0.5, 0.5, 1] },
-            { x: 2000, y: 3500, w: 1000, h: 40, color: [0.5, 0.5, 0.5, 1] }
+            // Outer limits (8000x8000)
+            { x: 4000, y: -20, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
+            { x: 4000, y: 8020, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
+            { x: -20, y: 4000, w: 40, h: 8040, color: [0.3, 0.3, 0.3, 1] },
+            { x: 8020, y: 4000, w: 40, h: 8040, color: [0.3, 0.3, 0.3, 1] },
+            // Inner obstacles (Dividers scaled x2)
+            { x: 2000, y: 2000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+            { x: 6000, y: 2000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+            { x: 2000, y: 6000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+            { x: 6000, y: 6000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+            { x: 4000, y: 3000, w: 80, h: 1600, color: [0.4, 0.4, 0.4, 1] },
+            { x: 4000, y: 5000, w: 80, h: 1600, color: [0.4, 0.4, 0.4, 1] },
+            { x: 3000, y: 4000, w: 1600, h: 80, color: [0.4, 0.4, 0.4, 1] },
+            { x: 5000, y: 4000, w: 1600, h: 80, color: [0.4, 0.4, 0.4, 1] },
+            { x: 1000, y: 4000, w: 80, h: 2000, color: [0.5, 0.5, 0.5, 1] },
+            { x: 7000, y: 4000, w: 80, h: 2000, color: [0.5, 0.5, 0.5, 1] },
+            { x: 4000, y: 1000, w: 2000, h: 80, color: [0.5, 0.5, 0.5, 1] },
+            { x: 4000, y: 7000, w: 2000, h: 80, color: [0.5, 0.5, 0.5, 1] }
         ];
 
         this.spawnPoints = [
-            { x: 400, y: 400, name: 'TL' },
-            { x: 3600, y: 400, name: 'TR' },
-            { x: 400, y: 3600, name: 'BL' },
-            { x: 3600, y: 3600, name: 'BR' },
-            { x: 2000, y: 2000, name: 'C' }
+            { x: 800, y: 800, name: 'TL' },
+            { x: 7200, y: 800, name: 'TR' },
+            { x: 800, y: 7200, name: 'BL' },
+            { x: 7200, y: 7200, name: 'BR' },
+            { x: 4000, y: 4000, name: 'C' }
         ];
 
         this.extractionZones = [
-            { x: 300, y: 300, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'TL_EXIT' },
-            { x: 3700, y: 300, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'TR_EXIT' },
-            { x: 300, y: 3700, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
-            { x: 3700, y: 3700, w: 300, h: 300, color: [0, 1, 0.5, 0.3], name: 'BR_EXIT' }
+            { x: 600, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TL_EXIT' },
+            { x: 7400, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TR_EXIT' },
+            { x: 600, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
+            { x: 7400, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BR_EXIT' }
         ];
 
         this.isInMenu = false;

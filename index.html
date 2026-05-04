@@ -299,6 +299,14 @@
                     style="color: cyan; font-weight: bold; font-size: 14px; margin-top: 5px;">(換彈中...)</div>
             </div>
 
+            <!-- Full Map Overlay -->
+            <div id="fullmap-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1500; display: flex; justify-content: center; align-items: center; flex-direction: column;">
+                <h3 style="color: white; margin-bottom: 10px; z-index: 1501;">總地圖 (點擊或按 M 關閉)</h3>
+                <div style="border: 3px solid #777; width: 80%; height: 80%; max-width: 800px; max-height: 800px; background: #222; z-index: 1501;">
+                    <canvas id="fullmap-canvas" width="800" height="800" style="width: 100%; height: 100%;"></canvas>
+                </div>
+            </div>
+
             <!-- Action Progress Bar (Center Screen) -->
             <div id="action-progress" class="hidden" style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 5px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #555; z-index: 500;">
                 <div id="action-text" style="color: white; font-size: 16px; font-weight: bold;">處理中... 0.0s</div>
@@ -422,6 +430,6 @@
         </div>
     </div>
 
-    <script type="module" src="main.js?v=1777901105736"></script>
+    <script type="module" src="main.js?v=1777904933763"></script>
 </body>
 </html>
