@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=1777900380573';
-import { UIManager } from './ui.js?v=1777900380573';
-import { ItemDatabase, EconomyRules } from './db.js?v=1777900380573';
-import { GameSimulation } from './game_simulation.js?v=1777900380573';
+import { InventorySystem } from './inventory.js?v=1777901105736';
+import { UIManager } from './ui.js?v=1777901105736';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777901105736';
+import { GameSimulation } from './game_simulation.js?v=1777901105736';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -110,6 +110,9 @@ class Game {
     }
 
     connectServer() {
+        console.log('[Client] Multiplayer disabled locally for now.');
+        this.isMultiplayer = false;
+        /*
         this.ws = new WebSocket('ws://localhost:8081');
         this.ws.onopen = () => {
             console.log('[Client] Connected to WebSocket Server');
@@ -150,6 +153,7 @@ class Game {
             console.log('[Client] Disconnected from server.');
             this.isMultiplayer = false;
         };
+        */
     }
 
     sendInput() {
@@ -1340,8 +1344,6 @@ class Game {
 
             this.update(dt);
             this.render();
-
-            requestAnimationFrame((t) => this.loop(t));
         } catch (e) {
             console.error("CRITICAL LOOP ERROR:", e);
             const errEl = document.getElementById('error-msg');

@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1777900380573';
+import { ItemDatabase, EconomyRules } from './db.js?v=1777901105736';
 
 export class UIManager {
     constructor(game) {
