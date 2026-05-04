@@ -6,38 +6,119 @@
     <style>
         body { background: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
         canvas { border: 1px solid #555; background: #111; cursor: crosshair; }
-        .controls { margin-bottom: 10px; display: flex; gap: 10px; }
-        textarea { width: 800px; height: 100px; background: #333; color: #fff; border: 1px solid #555; }
+        .controls { margin-bottom: 10px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; background: #333; padding: 15px; border-radius: 8px; width: 800px; }
+        .controls label { display: flex; align-items: center; gap: 5px; }
+        input[type="number"] { width: 60px; background: #111; color: white; border: 1px solid #555; padding: 3px; }
+        select { background: #111; color: white; border: 1px solid #555; padding: 3px; }
+        button { background: #444; color: white; border: 1px solid #666; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #555; }
+        textarea { width: 800px; height: 150px; background: #111; color: #0f0; border: 1px solid #555; font-family: monospace; padding: 10px; }
+        .delete-mode { color: #ff5555; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h2>2D Top-down Shooter 地圖編輯器 (8000x8000)</h2>
+    <h2>2D Top-down Shooter 地圖編輯器 (點擊放物件畫法)</h2>
     <div class="controls">
         <label>模式:
-            <select id="mode">
-                <option value="wall">畫牆壁 (Obstacle)</option>
-                <option value="spawn">放置生成點 (Spawn)</option>
-                <option value="exit">放置撤離點 (Exit)</option>
+            <select id="mode" onchange="updateUI()">
+                <option value="wall">🧱 放置牆壁 (Obstacle)</option>
+                <option value="exit">🚪 放置撤離點 (Exit)</option>
+                <option value="spawn">🧍 放置生成點 (Spawn)</option>
+                <option value="delete">❌ 刪除物件</option>
             </select>
         </label>
-        <button onclick="exportData()">匯出代碼 (Export)</button>
-        <button onclick="clearMap()">清除全部</button>
+        
+        <span id="size-inputs">
+            <label>寬 (W): <input type="number" id="obj-w" value="400" step="10"></label>
+            <label>高 (H): <input type="number" id="obj-h" value="40" step="10"></label>
+        </span>
+        
+        <span id="name-inputs" style="display: none;">
+            <label>名稱 (Name): <input type="text" id="obj-name" value="SPAWN_NEW" style="width:100px; background:#111; color:white; border:1px solid #555;"></label>
+        </span>
+
+        <label title="開啟後滑鼠會自動對齊 100x100 的網格">
+            <input type="checkbox" id="snap-grid" checked> 網格對齊 (Snap)
+        </label>
+
+        <button onclick="exportData()">💾 匯出代碼 (Export)</button>
+        <button onclick="resetToDefault()">🔄 載入預設地圖</button>
+        <button onclick="clearMap()" style="background: #622;">🗑️ 清除全部</button>
     </div>
     <canvas id="editor" width="800" height="800"></canvas>
-    <textarea id="output" readonly></textarea>
+    <br>
+    <textarea id="output" readonly placeholder="點擊「匯出代碼」後，這裡會產生 game_simulation.js 的格式..."></textarea>
 
     <script>
         const canvas = document.getElementById('editor');
         const ctx = canvas.getContext('2d');
-        const scale = 10; // 8000 map -> 800 canvas
+        const MAP_SIZE = 8000;
+        const scale = MAP_SIZE / canvas.width; // 10
         
         let walls = [];
         let spawns = [];
         let exits = [];
 
-        let isDrawing = false;
-        let startX = 0; let startY = 0;
         let currentX = 0; let currentY = 0;
+        let isHovering = false;
+
+        function updateUI() {
+            const mode = document.getElementById('mode').value;
+            if (mode === 'wall' || mode === 'exit') {
+                document.getElementById('size-inputs').style.display = 'inline-flex';
+                document.getElementById('name-inputs').style.display = (mode === 'exit' ? 'inline-flex' : 'none');
+                if(mode === 'exit' && document.getElementById('obj-name').value.startsWith('SPAWN')) {
+                    document.getElementById('obj-name').value = 'EXIT_' + exits.length;
+                    document.getElementById('obj-w').value = 600;
+                    document.getElementById('obj-h').value = 600;
+                }
+            } else if (mode === 'spawn') {
+                document.getElementById('size-inputs').style.display = 'none';
+                document.getElementById('name-inputs').style.display = 'inline-flex';
+                if(document.getElementById('obj-name').value.startsWith('EXIT')) {
+                    document.getElementById('obj-name').value = 'SPAWN_' + spawns.length;
+                }
+            } else {
+                document.getElementById('size-inputs').style.display = 'none';
+                document.getElementById('name-inputs').style.display = 'none';
+            }
+            draw();
+        }
+
+        function resetToDefault() {
+            walls = [
+                { x: 4000, y: -20, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
+                { x: 4000, y: 8020, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
+                { x: -20, y: 4000, w: 40, h: 8040, color: [0.3, 0.3, 0.3, 1] },
+                { x: 8020, y: 4000, w: 40, h: 8040, color: [0.3, 0.3, 0.3, 1] },
+                { x: 2000, y: 2000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+                { x: 6000, y: 2000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+                { x: 2000, y: 6000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+                { x: 6000, y: 6000, w: 1200, h: 80, color: [0.5, 0.5, 0.5, 1] },
+                { x: 4000, y: 3000, w: 80, h: 1600, color: [0.4, 0.4, 0.4, 1] },
+                { x: 4000, y: 5000, w: 80, h: 1600, color: [0.4, 0.4, 0.4, 1] },
+                { x: 3000, y: 4000, w: 1600, h: 80, color: [0.4, 0.4, 0.4, 1] },
+                { x: 5000, y: 4000, w: 1600, h: 80, color: [0.4, 0.4, 0.4, 1] },
+                { x: 1000, y: 4000, w: 80, h: 2000, color: [0.5, 0.5, 0.5, 1] },
+                { x: 7000, y: 4000, w: 80, h: 2000, color: [0.5, 0.5, 0.5, 1] },
+                { x: 4000, y: 1000, w: 2000, h: 80, color: [0.5, 0.5, 0.5, 1] },
+                { x: 4000, y: 7000, w: 2000, h: 80, color: [0.5, 0.5, 0.5, 1] }
+            ];
+            spawns = [
+                { x: 800, y: 800, name: 'TL' },
+                { x: 7200, y: 800, name: 'TR' },
+                { x: 800, y: 7200, name: 'BL' },
+                { x: 7200, y: 7200, name: 'BR' },
+                { x: 4000, y: 4000, name: 'C' }
+            ];
+            exits = [
+                { x: 600, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TL_EXIT' },
+                { x: 7400, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TR_EXIT' },
+                { x: 600, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
+                { x: 7400, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BR_EXIT' }
+            ];
+            draw();
+        }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -45,82 +126,129 @@
             // Draw grid
             ctx.strokeStyle = '#333';
             ctx.lineWidth = 1;
-            for(let i=0; i<=800; i+=100) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 800); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(800, i); ctx.stroke();
+            for(let i=0; i<=canvas.width; i+=1000/scale) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
             }
 
+            // Notice: x, y in game_simulation are CENTER coordinates for walls and exits!
             // Draw walls
             ctx.fillStyle = 'rgba(120, 120, 120, 1)';
-            for(let w of walls) ctx.fillRect(w.x/scale, w.y/scale, w.w/scale, w.h/scale);
-
-            // Draw spawns
-            ctx.fillStyle = 'blue';
-            for(let s of spawns) {
-                ctx.beginPath(); ctx.arc(s.x/scale, s.y/scale, 5, 0, Math.PI*2); ctx.fill();
-            }
+            for(let w of walls) ctx.fillRect((w.x - w.w/2)/scale, (w.y - w.h/2)/scale, w.w/scale, w.h/scale);
 
             // Draw exits
-            ctx.fillStyle = 'rgba(0, 255, 100, 0.5)';
-            for(let e of exits) ctx.fillRect(e.x/scale, e.y/scale, e.w/scale, e.h/scale);
+            ctx.fillStyle = 'rgba(0, 255, 100, 0.4)';
+            ctx.strokeStyle = 'rgba(0, 255, 100, 1)';
+            for(let e of exits) {
+                ctx.fillRect((e.x - e.w/2)/scale, (e.y - e.h/2)/scale, e.w/scale, e.h/scale);
+                ctx.strokeRect((e.x - e.w/2)/scale, (e.y - e.h/2)/scale, e.w/scale, e.h/scale);
+                ctx.fillStyle = 'white';
+                ctx.font = '10px sans-serif';
+                ctx.fillText(e.name, (e.x - e.w/2)/scale + 5, (e.y - e.h/2)/scale + 15);
+                ctx.fillStyle = 'rgba(0, 255, 100, 0.4)';
+            }
 
-            // Draw current
-            if (isDrawing) {
+            // Draw spawns
+            ctx.fillStyle = 'rgba(50, 150, 255, 1)';
+            for(let s of spawns) {
+                ctx.beginPath(); ctx.arc(s.x/scale, s.y/scale, 4, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'white';
+                ctx.fillText(s.name, s.x/scale + 5, s.y/scale - 5);
+                ctx.fillStyle = 'rgba(50, 150, 255, 1)';
+            }
+
+            // Draw current object attached to mouse
+            if (isHovering) {
                 const mode = document.getElementById('mode').value;
+                const snap = document.getElementById('snap-grid').checked;
+                let mx = currentX * scale;
+                let my = currentY * scale;
+                if (snap) {
+                    mx = Math.round(mx / 100) * 100;
+                    my = Math.round(my / 100) * 100;
+                }
+
                 if (mode === 'wall') {
-                    ctx.fillStyle = 'rgba(120, 120, 120, 0.5)';
-                    ctx.fillRect(startX, startY, currentX - startX, currentY - startY);
+                    const w = parseInt(document.getElementById('obj-w').value) || 100;
+                    const h = parseInt(document.getElementById('obj-h').value) || 100;
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+                    ctx.fillRect((mx - w/2)/scale, (my - h/2)/scale, w/scale, h/scale);
                 } else if (mode === 'exit') {
-                    ctx.fillStyle = 'rgba(0, 255, 100, 0.3)';
-                    ctx.fillRect(startX, startY, currentX - startX, currentY - startY);
+                    const w = parseInt(document.getElementById('obj-w').value) || 600;
+                    const h = parseInt(document.getElementById('obj-h').value) || 600;
+                    ctx.fillStyle = 'rgba(0, 255, 100, 0.6)';
+                    ctx.fillRect((mx - w/2)/scale, (my - h/2)/scale, w/scale, h/scale);
+                } else if (mode === 'spawn') {
+                    ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
+                    ctx.beginPath(); ctx.arc(mx/scale, my/scale, 4, 0, Math.PI*2); ctx.fill();
+                } else if (mode === 'delete') {
+                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+                    ctx.beginPath(); ctx.arc(mx/scale, my/scale, 10, 0, Math.PI*2); ctx.fill();
                 }
             }
         }
 
-        canvas.onmousedown = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            startX = e.clientX - rect.left;
-            startY = e.clientY - rect.top;
-            isDrawing = true;
-        };
-
         canvas.onmousemove = (e) => {
-            if (!isDrawing) return;
             const rect = canvas.getBoundingClientRect();
             currentX = e.clientX - rect.left;
             currentY = e.clientY - rect.top;
+            isHovering = true;
             draw();
         };
 
-        canvas.onmouseup = (e) => {
-            if (!isDrawing) return;
-            isDrawing = false;
+        canvas.onmouseout = () => {
+            isHovering = false;
+            draw();
+        }
+
+        canvas.onclick = (e) => {
             const mode = document.getElementById('mode').value;
-            const rx = Math.min(startX, currentX) * scale;
-            const ry = Math.min(startY, currentY) * scale;
-            const rw = Math.abs(currentX - startX) * scale;
-            const rh = Math.abs(currentY - startY) * scale;
+            const snap = document.getElementById('snap-grid').checked;
+            let mx = currentX * scale;
+            let my = currentY * scale;
+            if (snap) {
+                mx = Math.round(mx / 100) * 100;
+                my = Math.round(my / 100) * 100;
+            }
 
             if (mode === 'wall') {
-                if (rw > 10 && rh > 10) walls.push({x: rx, y: ry, w: rw, h: rh, color: [0.5, 0.5, 0.5, 1]});
+                const w = parseInt(document.getElementById('obj-w').value) || 100;
+                const h = parseInt(document.getElementById('obj-h').value) || 100;
+                walls.push({x: mx, y: my, w: w, h: h, color: [0.5, 0.5, 0.5, 1]});
             } else if (mode === 'exit') {
-                if (rw > 10 && rh > 10) exits.push({x: rx, y: ry, w: rw, h: rh, color: [0, 1, 0.5, 0.3], name: 'EXIT_' + exits.length});
+                const w = parseInt(document.getElementById('obj-w').value) || 600;
+                const h = parseInt(document.getElementById('obj-h').value) || 600;
+                const name = document.getElementById('obj-name').value || 'EXIT_' + exits.length;
+                exits.push({x: mx, y: my, w: w, h: h, color: [0, 1, 0.5, 0.3], name: name});
+                document.getElementById('obj-name').value = 'EXIT_' + exits.length;
             } else if (mode === 'spawn') {
-                spawns.push({x: startX * scale, y: startY * scale, name: 'SPAWN_' + spawns.length});
+                const name = document.getElementById('obj-name').value || 'SPAWN_' + spawns.length;
+                spawns.push({x: mx, y: my, name: name});
+                document.getElementById('obj-name').value = 'SPAWN_' + spawns.length;
+            } else if (mode === 'delete') {
+                // Delete object if mouse is inside it
+                walls = walls.filter(w => !(mx >= w.x - w.w/2 && mx <= w.x + w.w/2 && my >= w.y - w.h/2 && my <= w.y + w.h/2));
+                exits = exits.filter(ex => !(mx >= ex.x - ex.w/2 && mx <= ex.x + ex.w/2 && my >= ex.y - ex.h/2 && my <= ex.y + ex.h/2));
+                spawns = spawns.filter(s => Math.hypot(mx - s.x, my - s.y) > 100);
             }
             draw();
         };
 
         window.exportData = () => {
-            let out = `this.walls = [\n  ${walls.map(w => `{ x: ${w.x}, y: ${w.y}, w: ${w.w}, h: ${w.h}, color: [0.5, 0.5, 0.5, 1] }`).join(',\n  ')}\n];\n\n`;
-            out += `this.spawnPoints = [\n  ${spawns.map(s => `{ x: ${s.x}, y: ${s.y}, name: '${s.name}' }`).join(',\n  ')}\n];\n\n`;
-            out += `this.extractionZones = [\n  ${exits.map(e => `{ x: ${e.x}, y: ${e.y}, w: ${e.w}, h: ${e.h}, color: [0, 1, 0.5, 0.3], name: '${e.name}' }`).join(',\n  ')}\n];`;
+            let out = `        this.walls = [\n            ${walls.map(w => `{ x: ${w.x}, y: ${w.y}, w: ${w.w}, h: ${w.h}, color: [0.5, 0.5, 0.5, 1] }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.spawnPoints = [\n            ${spawns.map(s => `{ x: ${s.x}, y: ${s.y}, name: '${s.name}' }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.extractionZones = [\n            ${exits.map(e => `{ x: ${e.x}, y: ${e.y}, w: ${e.w}, h: ${e.h}, color: [0, 1, 0.5, 0.3], name: '${e.name}' }`).join(',\n            ')}\n        ];`;
             document.getElementById('output').value = out;
+            document.getElementById('output').select();
+            document.execCommand('copy');
+            alert('代碼已生成並複製到剪貼簿！請將其貼上並取代 game_simulation.js 中的對應陣列。');
         };
 
         window.clearMap = () => { walls=[]; spawns=[]; exits=[]; draw(); };
 
-        draw();
+        // Initialize
+        updateUI();
+        resetToDefault();
     </script>
 </body>
 </html>
