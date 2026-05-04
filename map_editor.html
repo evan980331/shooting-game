@@ -157,6 +157,11 @@
                 ctx.fillStyle = 'rgba(50, 150, 255, 1)';
             }
 
+            // Draw boundaries clearly
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
+            
             // Draw current object attached to mouse
             if (isHovering) {
                 const mode = document.getElementById('mode').value;
@@ -167,6 +172,11 @@
                     mx = Math.round(mx / 100) * 100;
                     my = Math.round(my / 100) * 100;
                 }
+
+                // Draw coordinates text next to mouse
+                ctx.fillStyle = 'yellow';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(`(${mx}, ${my})`, currentX + 15, currentY + 15);
 
                 if (mode === 'wall') {
                     const w = parseInt(document.getElementById('obj-w').value) || 100;
@@ -190,8 +200,10 @@
 
         canvas.onmousemove = (e) => {
             const rect = canvas.getBoundingClientRect();
-            currentX = e.clientX - rect.left;
-            currentY = e.clientY - rect.top;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            currentX = (e.clientX - rect.left) * scaleX;
+            currentY = (e.clientY - rect.top) * scaleY;
             isHovering = true;
             draw();
         };
@@ -204,6 +216,12 @@
         canvas.onclick = (e) => {
             const mode = document.getElementById('mode').value;
             const snap = document.getElementById('snap-grid').checked;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            currentX = (e.clientX - rect.left) * scaleX;
+            currentY = (e.clientY - rect.top) * scaleY;
+            
             let mx = currentX * scale;
             let my = currentY * scale;
             if (snap) {
