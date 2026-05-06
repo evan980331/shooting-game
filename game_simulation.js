@@ -1,5 +1,5 @@
-import { InventorySystem } from './inventory.js?v=1777904933763';
-import { ItemDatabase } from './db.js?v=1777904933763';
+import { InventorySystem } from './inventory.js?v=1778075789';
+import { ItemDatabase } from './db.js?v=1778075789';
 
 export class MathUtils {
     static seed = 1234567;
@@ -73,6 +73,11 @@ export class GameSimulation {
         this.gameTimer = 900;
         
         // Single player / local client flags
+        // Map objects (Support for Editor v9.5)
+        this.safes = [];
+        this.lootPoints = [];
+        this.buildings = [];
+
         this.events = {
             inventoryDirty: false,
             playerDied: false,

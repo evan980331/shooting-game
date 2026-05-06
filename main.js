@@ -1,7 +1,7 @@
-import { InventorySystem } from './inventory.js?v=1777904933763';
-import { UIManager } from './ui.js?v=1777904933763';
-import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
-import { GameSimulation } from './game_simulation.js?v=1777904933763';
+import { InventorySystem } from './inventory.js?v=1778075789';
+import { UIManager } from './ui.js?v=1778075789';
+import { ItemDatabase, EconomyRules } from './db.js?v=1778075789';
+import { GameSimulation } from './game_simulation.js?v=1778075789';
 
 const WGSL_SHADER = `
 struct VertexOutput {
@@ -781,42 +781,135 @@ class Game {
     renderFullMap() {
         const fullCanvas = document.getElementById('fullmap-canvas');
         if (!fullCanvas) return;
+
+        // Sync canvas resolution to container's actual display size
+        const container = fullCanvas.parentElement;
+        const displayW = container.clientWidth;
+        const displayH = container.clientHeight;
+        if (fullCanvas.width !== displayW || fullCanvas.height !== displayH) {
+            fullCanvas.width  = displayW;
+            fullCanvas.height = displayH;
+        }
+
         const ctx = fullCanvas.getContext('2d');
         const mapSize = 8000;
-        const scale = fullCanvas.width / mapSize;
+        const scaleX = fullCanvas.width  / mapSize;
+        const scaleY = fullCanvas.height / mapSize;
 
         ctx.clearRect(0, 0, fullCanvas.width, fullCanvas.height);
-        
+
+        // Draw Grass/Bushes (New: Matches gameplay view)
+        if (this.sim.state.grass) {
+            ctx.fillStyle = "rgba(40, 120, 40, 0.6)";
+            for (let g of this.sim.state.grass) {
+                const gx = g.x * scaleX;
+                const gy = g.y * scaleY;
+                const gw = g.w * scaleX;
+                const gh = g.h * scaleY;
+                ctx.beginPath();
+                ctx.arc(gx, gy, (gw + gh) / 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
         // Draw Walls
-        ctx.fillStyle = "rgba(100, 100, 100, 1)";
         for (let w of this.walls) {
-            ctx.fillRect(w.x * scale, w.y * scale, w.w * scale, w.h * scale);
+            // Use wall's own color if available, else default gray
+            if (w.color) {
+                ctx.fillStyle = `rgba(${w.color[0]*255}, ${w.color[1]*255}, ${w.color[2]*255}, ${w.color[3]})`;
+            } else {
+                ctx.fillStyle = "rgba(120, 120, 120, 1)";
+            }
+            
+            ctx.fillRect(
+                (w.x - w.w / 2) * scaleX,
+                (w.y - w.h / 2) * scaleY,
+                w.w * scaleX,
+                w.h * scaleY
+            );
         }
 
-        // Draw Player
-        if (this.player && !this.player.isDead) {
-            ctx.fillStyle = "rgba(0, 150, 255, 1)";
-            ctx.beginPath();
-            ctx.arc(this.player.x * scale, this.player.y * scale, 4, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Direction indicator
-            ctx.strokeStyle = "rgba(255, 255, 0, 1)";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(this.player.x * scale, this.player.y * scale);
-            ctx.lineTo((this.player.x + Math.cos(this.player.rotation) * 40) * scale, (this.player.y + Math.sin(this.player.rotation) * 40) * scale);
-            ctx.stroke();
+        // Draw Buildings (Background landmarks)
+        if (this.sim.buildings) {
+            ctx.fillStyle = "rgba(100, 100, 150, 0.4)";
+            ctx.strokeStyle = "rgba(100, 100, 255, 0.6)";
+            for (let b of this.sim.buildings) {
+                const bx = (b.x - b.w / 2) * scaleX;
+                const by = (b.y - b.h / 2) * scaleY;
+                const bw = b.w * scaleX;
+                const bh = b.h * scaleY;
+                ctx.fillRect(bx, by, bw, bh);
+                ctx.strokeRect(bx, by, bw, bh);
+            }
         }
 
-        // Draw Valid Exits
-        ctx.fillStyle = "rgba(0, 255, 100, 0.4)";
-        ctx.strokeStyle = "rgba(0, 255, 100, 1)";
-        ctx.lineWidth = 1;
+        // Draw Safes (POI)
+        if (this.sim.safes) {
+            ctx.fillStyle = "#00ffff";
+            const safeSize = 4 * (scaleX / 0.1); // Scaled safe icon
+            for (let s of this.sim.safes) {
+                ctx.fillRect(s.x * scaleX - 2, s.y * scaleY - 2, 4, 4);
+            }
+        }
+
+        // Draw Loot Points
+        if (this.sim.lootPoints) {
+            ctx.fillStyle = "#ffaa00";
+            for (let l of this.sim.lootPoints) {
+                ctx.beginPath();
+                ctx.arc(l.x * scaleX, l.y * scaleY, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Draw Valid Exit Zones
+        ctx.fillStyle   = "rgba(0, 255, 100, 0.3)";
+        ctx.strokeStyle = "rgba(0, 255, 100, 0.8)";
+        ctx.lineWidth = 2;
         for (let z of this.extractionZones) {
             if (this.player && this.player.targetExitName && z.name !== this.player.targetExitName) continue;
-            ctx.fillRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
-            ctx.strokeRect(z.x * scale, z.y * scale, z.w * scale, z.h * scale);
+            const zx = (z.x - z.w / 2) * scaleX;
+            const zy = (z.y - z.h / 2) * scaleY;
+            const zw = z.w * scaleX;
+            const zh = z.h * scaleY;
+            ctx.fillRect(zx, zy, zw, zh);
+            ctx.strokeRect(zx, zy, zw, zh);
+            
+            // Text label for EXIT
+            ctx.fillStyle = "#0f0";
+            ctx.font = "bold 14px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("EXIT", zx + zw/2, zy + zh/2);
+        }
+
+        // Draw Player dot + direction
+        if (this.player && !this.player.isDead) {
+            const px = this.player.x * scaleX;
+            const py = this.player.y * scaleY;
+            const dotR = 6;
+
+            ctx.fillStyle = "rgba(0, 150, 255, 1)";
+            ctx.beginPath();
+            ctx.arc(px, py, dotR, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "white";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(px, py, dotR, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // Direction arrow
+            const dirLen = 20;
+            ctx.strokeStyle = "yellow";
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(px, py);
+            ctx.lineTo(
+                px + Math.cos(this.player.rotation) * dirLen,
+                py + Math.sin(this.player.rotation) * dirLen
+            );
+            ctx.stroke();
         }
     }
 

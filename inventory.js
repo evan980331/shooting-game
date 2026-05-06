@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
+import { ItemDatabase, EconomyRules } from './db.js?v=1778075789';
 
 export class InventorySystem {
     constructor(playerRef) {
@@ -242,7 +242,15 @@ export class InventorySystem {
             }
         }
         
-        // If it was already in a gear slot (not stash), and we double clicked it: unequip to stash
+        // Overflow to backpack when item from stash/secureContainer doesn't fit gear slots
+        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'secure'].includes(dbItem.type)) {
+            const bpSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.backpack);
+            if (bpSlot) {
+                return this.moveItem(itemId, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated).success;
+            }
+        }
+
+        // If already in a gear slot: try to unequip back to stash
         if (item.container !== 'stash') {
             const slot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.stash);
             if (slot) {

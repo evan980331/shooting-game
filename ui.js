@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1777904933763';
+import { ItemDatabase, EconomyRules } from './db.js?v=1778075789';
 
 export class UIManager {
     constructor(game) {
@@ -1039,9 +1039,8 @@ export class UIManager {
                 if (this.inv.autoEquip(item.id)) {
                     this.refreshInventory();
                     this.game.updateHUD();
-                } else if (item.container !== 'stash') {
-                    // autoEquip failed - try stash fallback
-                    this._showQuickEquipError('所有目標欄位與背包均已滿，無法快速放入');
+                } else {
+                    this._showQuickEquipError('空間不足或無對應欄位，無法快速移動');
                 }
             });
 

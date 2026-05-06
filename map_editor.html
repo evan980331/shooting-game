@@ -2,90 +2,337 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Map Editor</title>
+    <title>Map Editor v9.5</title>
     <style>
-        body { background: #222; color: white; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
-        canvas { border: 1px solid #555; background: #111; cursor: crosshair; }
-        .controls { margin-bottom: 10px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; background: #333; padding: 15px; border-radius: 8px; width: 800px; }
-        .controls label { display: flex; align-items: center; gap: 5px; }
-        input[type="number"] { width: 60px; background: #111; color: white; border: 1px solid #555; padding: 3px; }
-        select { background: #111; color: white; border: 1px solid #555; padding: 3px; }
-        button { background: #444; color: white; border: 1px solid #666; padding: 5px 10px; cursor: pointer; border-radius: 4px; }
-        button:hover { background: #555; }
-        textarea { width: 800px; height: 150px; background: #111; color: #0f0; border: 1px solid #555; font-family: monospace; padding: 10px; }
-        .delete-mode { color: #ff5555; font-weight: bold; }
+        body { background: #1a1a1a; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+        .container { display: flex; gap: 20px; max-width: 1200px; width: 100%; }
+        .sidebar { flex: 0 0 300px; background: #2a2a2a; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .main-view { flex: 1; display: flex; flex-direction: column; align-items: center; }
+        canvas { border: 2px solid #444; background: #000; cursor: crosshair; box-shadow: 0 0 20px rgba(0,0,0,0.8); }
+        
+        h2 { margin-top: 0; color: #00ffaa; border-bottom: 1px solid #444; padding-bottom: 10px; }
+        .section { margin-bottom: 20px; }
+        .section-title { font-size: 0.9em; text-transform: uppercase; color: #888; margin-bottom: 8px; font-weight: bold; }
+        
+        .controls { display: flex; flex-direction: column; gap: 12px; }
+        .control-group { display: flex; align-items: center; gap: 10px; justify-content: space-between; }
+        
+        input[type="number"], input[type="text"], select { 
+            background: #111; color: #eee; border: 1px solid #555; padding: 5px; border-radius: 4px; width: 80px;
+        }
+        select { width: 100%; padding: 8px; font-size: 1em; }
+        
+        button { 
+            background: #3a3a3a; color: #fff; border: 1px solid #555; padding: 10px; cursor: pointer; border-radius: 6px; 
+            transition: all 0.2s; font-weight: bold;
+        }
+        button:hover { background: #4a4a4a; border-color: #777; }
+        button.primary { background: #0066cc; border-color: #0088ff; }
+        button.primary:hover { background: #0088ff; }
+        button.danger { background: #662222; border-color: #aa4444; }
+        button.danger:hover { background: #883333; }
+        
+        .stats { font-size: 0.85em; color: #aaa; margin-top: 10px; background: #222; padding: 10px; border-radius: 6px; }
+        textarea { 
+            width: 100%; height: 120px; background: #050505; color: #0f0; border: 1px solid #333; 
+            font-family: 'Consolas', monospace; padding: 10px; border-radius: 6px; margin-top: 10px; resize: none;
+            font-size: 11px;
+        }
+        
+        .toolbar { margin-bottom: 15px; display: flex; gap: 15px; background: #2a2a2a; padding: 10px 20px; border-radius: 10px; width: 800px; }
+        .coord-display { font-family: monospace; color: #ffdd00; font-weight: bold; min-width: 120px; }
     </style>
 </head>
 <body>
-    <h2>2D Top-down Shooter 地圖編輯器 (點擊放物件畫法)</h2>
-    <div class="controls">
-        <label>模式:
-            <select id="mode" onchange="updateUI()">
-                <option value="wall">🧱 放置牆壁 (Obstacle)</option>
-                <option value="exit">🚪 放置撤離點 (Exit)</option>
-                <option value="spawn">🧍 放置生成點 (Spawn)</option>
-                <option value="delete">❌ 刪除物件</option>
-            </select>
-        </label>
-        
-        <span id="size-inputs">
-            <label>寬 (W): <input type="number" id="obj-w" value="400" step="10"></label>
-            <label>高 (H): <input type="number" id="obj-h" value="40" step="10"></label>
-        </span>
-        
-        <span id="name-inputs" style="display: none;">
-            <label>名稱 (Name): <input type="text" id="obj-name" value="SPAWN_NEW" style="width:100px; background:#111; color:white; border:1px solid #555;"></label>
-        </span>
-
-        <label title="開啟後滑鼠會自動對齊 100x100 的網格">
-            <input type="checkbox" id="snap-grid" checked> 網格對齊 (Snap)
-        </label>
-
-        <button onclick="exportData()">💾 匯出代碼 (Export)</button>
-        <button onclick="resetToDefault()">🔄 載入預設地圖</button>
-        <button onclick="clearMap()" style="background: #622;">🗑️ 清除全部</button>
+    <div class="toolbar">
+        <div class="coord-display" id="cursor-pos">POS: 0, 0</div>
+        <div class="control-group">
+            <label>縮放 (Zoom):</label>
+            <input type="range" id="zoom-range" min="0.5" max="4.0" step="0.1" value="1.0" oninput="updateZoom()">
+            <span id="zoom-val">1.0x</span>
+        </div>
+        <div class="control-group">
+            <label><input type="checkbox" id="show-grid" checked onchange="draw()"> 顯示格線</label>
+            <label><input type="checkbox" id="snap-grid" checked> 對齊網格</label>
+        </div>
     </div>
-    <canvas id="editor" width="800" height="800"></canvas>
-    <br>
-    <textarea id="output" readonly placeholder="點擊「匯出代碼」後，這裡會產生 game_simulation.js 的格式..."></textarea>
+
+    <div class="container">
+        <div class="sidebar">
+            <h2>地圖物件設定</h2>
+            
+            <div class="section">
+                <div class="section-title">放置模式</div>
+                <select id="mode" onchange="updateUI()">
+                    <option value="wall">🧱 牆壁 (Obstacle)</option>
+                    <option value="grass">🌿 草叢 (Bush)</option>
+                    <option value="safe">🔒 保險櫃 (Safe)</option>
+                    <option value="loot">📦 物資點 (Loot)</option>
+                    <option value="building">🏢 建築物標點 (Bldg)</option>
+                    <option value="exit">🚪 撤離點 (Exit)</option>
+                    <option value="spawn">🧍 生成點 (Spawn)</option>
+                    <option value="delete">❌ 刪除物件</option>
+                </select>
+            </div>
+
+            <div id="size-inputs" class="section">
+                <div class="section-title">物件尺寸</div>
+                <div class="control-group">
+                    <label>寬 (W):</label>
+                    <input type="number" id="obj-w" value="400" step="10">
+                </div>
+                <div class="control-group" style="margin-top:5px;">
+                    <label>高 (H):</label>
+                    <input type="number" id="obj-h" value="40" step="10">
+                </div>
+            </div>
+
+            <div id="name-inputs" class="section" style="display:none;">
+                <div class="section-title">物件名稱</div>
+                <input type="text" id="obj-name" value="DEFAULT" style="width: 100%;">
+            </div>
+
+            <div class="section" style="display: flex; flex-direction: column; gap: 8px;">
+                <button class="primary" onclick="exportData()">💾 匯出並複製代碼</button>
+                <button onclick="resetToDefault()">🔄 重置為預設地圖</button>
+                <button class="danger" onclick="clearMap()">🗑️ 清除全部物件</button>
+            </div>
+
+            <div class="stats" id="stats-panel">
+                物件統計:<br>
+                牆壁: 0, 草叢: 0, 物資: 0
+            </div>
+            
+            <textarea id="output" readonly></textarea>
+        </div>
+
+        <div class="main-view">
+            <div id="canvas-container" style="overflow: auto; width: 800px; height: 800px; border: 1px solid #444; background: #000;">
+                <canvas id="editor" width="8000" height="8000" style="width: 800px; height: 800px;"></canvas>
+            </div>
+            <p style="color: #666; font-size: 0.8em; margin-top: 10px;">
+                使用滾輪縮放 | 點擊放置物件 | 牆壁與撤離點座標採中心點計算法
+            </p>
+        </div>
+    </div>
 
     <script>
         const canvas = document.getElementById('editor');
         const ctx = canvas.getContext('2d');
         const MAP_SIZE = 8000;
-        const scale = MAP_SIZE / canvas.width; // 10
         
         let walls = [];
         let spawns = [];
         let exits = [];
+        let grass = [];
+        let safes = [];
+        let loots = [];
+        let buildings = [];
 
-        let currentX = 0; let currentY = 0;
+        let currentWorldX = 0;
+        let currentWorldY = 0;
+        let zoom = 1.0;
         let isHovering = false;
+
+        function updateZoom() {
+            zoom = parseFloat(document.getElementById('zoom-range').value);
+            document.getElementById('zoom-val').innerText = zoom.toFixed(1) + 'x';
+            canvas.style.width = (800 * zoom) + 'px';
+            canvas.style.height = (800 * zoom) + 'px';
+        }
 
         function updateUI() {
             const mode = document.getElementById('mode').value;
-            if (mode === 'wall' || mode === 'exit') {
-                document.getElementById('size-inputs').style.display = 'inline-flex';
-                document.getElementById('name-inputs').style.display = (mode === 'exit' ? 'inline-flex' : 'none');
-                if(mode === 'exit' && document.getElementById('obj-name').value.startsWith('SPAWN')) {
-                    document.getElementById('obj-name').value = 'EXIT_' + exits.length;
-                    document.getElementById('obj-w').value = 600;
-                    document.getElementById('obj-h').value = 600;
-                }
-            } else if (mode === 'spawn') {
-                document.getElementById('size-inputs').style.display = 'none';
-                document.getElementById('name-inputs').style.display = 'inline-flex';
-                if(document.getElementById('obj-name').value.startsWith('EXIT')) {
-                    document.getElementById('obj-name').value = 'SPAWN_' + spawns.length;
-                }
-            } else {
-                document.getElementById('size-inputs').style.display = 'none';
-                document.getElementById('name-inputs').style.display = 'none';
+            const sizeIn = document.getElementById('size-inputs');
+            const nameIn = document.getElementById('name-inputs');
+            
+            sizeIn.style.display = (['wall', 'exit', 'grass', 'building', 'loot'].includes(mode) ? 'block' : 'none');
+            nameIn.style.display = (['exit', 'spawn', 'building', 'loot', 'safe'].includes(mode) ? 'block' : 'none');
+
+            if (mode === 'grass') {
+                document.getElementById('obj-w').value = 60;
+                document.getElementById('obj-h').value = 60;
+            } else if (mode === 'safe') {
+                document.getElementById('obj-w').value = 40;
+                document.getElementById('obj-h').value = 40;
+                document.getElementById('obj-name').value = 'SAFE_' + safes.length;
+            } else if (mode === 'exit') {
+                document.getElementById('obj-w').value = 600;
+                document.getElementById('obj-h').value = 600;
             }
             draw();
         }
 
-        function resetToDefault() {
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid lines (player-sized 30x30 squares for alignment reference)
+            if (document.getElementById('show-grid').checked) {
+                ctx.strokeStyle = '#222';
+                ctx.lineWidth = 1;
+                // Major lines (1000)
+                for(let i=0; i<=MAP_SIZE; i+=1000) {
+                    ctx.strokeStyle = '#444';
+                    ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, MAP_SIZE); ctx.stroke();
+                    ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(MAP_SIZE, i); ctx.stroke();
+                }
+                // Minor lines (Player size 30) - only visible at high zoom for performance if needed
+                if (zoom > 1.5) {
+                    ctx.strokeStyle = '#1a1a1a';
+                    for(let i=0; i<=MAP_SIZE; i+=30) {
+                        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, MAP_SIZE); ctx.stroke();
+                        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(MAP_SIZE, i); ctx.stroke();
+                    }
+                }
+            }
+
+            // Draw boundaries
+            ctx.strokeStyle = 'red';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+
+            // Draw Buildings (background level)
+            ctx.fillStyle = 'rgba(80, 80, 100, 0.5)';
+            for(let b of buildings) {
+                ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+                ctx.strokeStyle = '#88f'; ctx.lineWidth = 2;
+                ctx.strokeRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+            }
+
+            // Draw Grass
+            ctx.fillStyle = 'rgba(40, 150, 40, 0.6)';
+            for(let g of grass) {
+                ctx.beginPath(); ctx.arc(g.x, g.y, (g.w+g.h)/4, 0, Math.PI*2); ctx.fill();
+            }
+
+            // Draw Walls
+            ctx.fillStyle = 'rgba(120, 120, 120, 1)';
+            for(let w of walls) ctx.fillRect(w.x - w.w/2, w.y - w.h/2, w.w, w.h);
+
+            // Draw Exits
+            ctx.fillStyle = 'rgba(0, 255, 100, 0.3)';
+            ctx.strokeStyle = '#0f0';
+            for(let e of exits) {
+                ctx.fillRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                ctx.strokeRect(e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+                ctx.fillStyle = 'white'; ctx.font = '80px sans-serif';
+                ctx.fillText(e.name, e.x - e.w/2 + 20, e.y - e.h/2 + 100);
+            }
+
+            // Draw Loots
+            ctx.fillStyle = '#ffaa00';
+            for(let l of loots) {
+                ctx.fillRect(l.x - l.w/2, l.y - l.h/2, l.w, l.h);
+                ctx.fillStyle = 'white'; ctx.font = '30px sans-serif';
+                ctx.fillText(l.name || 'LOOT', l.x, l.y);
+            }
+
+            // Draw Safes
+            ctx.fillStyle = '#00ffff';
+            for(let s of safes) {
+                ctx.fillRect(s.x - 20, s.y - 20, 40, 40);
+                ctx.strokeStyle = 'white'; ctx.strokeRect(s.x - 20, s.y - 20, 40, 40);
+            }
+
+            // Draw Spawns
+            ctx.fillStyle = '#3399ff';
+            for(let s of spawns) {
+                ctx.beginPath(); ctx.arc(s.x, s.y, 30, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = 'white'; ctx.font = '40px sans-serif';
+                ctx.fillText(s.name, s.x + 40, s.y);
+            }
+
+            // Draw Preview
+            if (isHovering) {
+                const mode = document.getElementById('mode').value;
+                const snap = document.getElementById('snap-grid').checked;
+                let mx = currentWorldX;
+                let my = currentWorldY;
+                if (snap) {
+                    mx = Math.round(mx / 30) * 30; // Snap to player size
+                    my = Math.round(my / 30) * 30;
+                }
+
+                if (mode === 'wall' || mode === 'exit' || mode === 'grass' || mode === 'building' || mode === 'loot') {
+                    const w = parseInt(document.getElementById('obj-w').value) || 100;
+                    const h = parseInt(document.getElementById('obj-h').value) || 100;
+                    ctx.fillStyle = mode === 'wall' ? 'rgba(255,255,255,0.4)' : (mode === 'exit' ? 'rgba(0,255,0,0.4)' : 'rgba(255,255,0,0.4)');
+                    ctx.fillRect(mx - w/2, my - h/2, w, h);
+                } else if (mode === 'spawn' || mode === 'safe') {
+                    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+                    ctx.beginPath(); ctx.arc(mx, my, 20, 0, Math.PI*2); ctx.fill();
+                } else if (mode === 'delete') {
+                    ctx.strokeStyle = 'red'; ctx.lineWidth = 5;
+                    ctx.beginPath(); ctx.arc(mx, my, 50, 0, Math.PI*2); ctx.stroke();
+                }
+            }
+
+            updateStats();
+        }
+
+        canvas.onmousemove = (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // Map mouse client coords to world coords (0-8000)
+            const xRel = (e.clientX - rect.left) / rect.width;
+            const yRel = (e.clientY - rect.top) / rect.height;
+            currentWorldX = xRel * MAP_SIZE;
+            currentWorldY = yRel * MAP_SIZE;
+            
+            document.getElementById('cursor-pos').innerText = `POS: ${Math.round(currentWorldX)}, ${Math.round(currentWorldY)}`;
+            isHovering = true;
+            draw();
+        };
+
+        canvas.onmouseout = () => { isHovering = false; draw(); };
+
+        canvas.onclick = (e) => {
+            const mode = document.getElementById('mode').value;
+            const snap = document.getElementById('snap-grid').checked;
+            
+            let mx = currentWorldX;
+            let my = currentWorldY;
+            if (snap) {
+                mx = Math.round(mx / 30) * 30;
+                my = Math.round(my / 30) * 30;
+            }
+
+            const w = parseInt(document.getElementById('obj-w').value) || 100;
+            const h = parseInt(document.getElementById('obj-h').value) || 100;
+            const name = document.getElementById('obj-name').value;
+
+            if (mode === 'wall') {
+                walls.push({x: mx, y: my, w: w, h: h, color:[0.5,0.5,0.5,1]});
+            } else if (mode === 'grass') {
+                grass.push({x: mx, y: my, w: w, h: h});
+            } else if (mode === 'safe') {
+                safes.push({x: mx, y: my});
+            } else if (mode === 'loot') {
+                loots.push({x: mx, y: my, w: w, h: h, name: name});
+            } else if (mode === 'building') {
+                buildings.push({x: mx, y: my, w: w, h: h, name: name});
+            } else if (mode === 'exit') {
+                exits.push({x: mx, y: my, w: w, h: h, name: name});
+            } else if (mode === 'spawn') {
+                spawns.push({x: mx, y: my, name: name});
+            } else if (mode === 'delete') {
+                const dist = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by);
+                walls = walls.filter(o => dist(mx, my, o.x, o.y) > 50);
+                grass = grass.filter(o => dist(mx, my, o.x, o.y) > 50);
+                safes = safes.filter(o => dist(mx, my, o.x, o.y) > 50);
+                loots = loots.filter(o => dist(mx, my, o.x, o.y) > 50);
+                buildings = buildings.filter(o => dist(mx, my, o.x, o.y) > 100);
+                exits = exits.filter(o => dist(mx, my, o.x, o.y) > 100);
+                spawns = spawns.filter(o => dist(mx, my, o.x, o.y) > 50);
+            }
+            draw();
+        };
+
+        function updateStats() {
+            const stats = `牆壁: ${walls.length} | 草叢: ${grass.length} | 出口: ${exits.length} | 生成: ${spawns.length} | 建物: ${buildings.length}`;
+            document.getElementById('stats-panel').innerText = stats;
+        }
+
+        window.resetToDefault = () => {
             walls = [
                 { x: 4000, y: -20, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
                 { x: 4000, y: 8020, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
@@ -117,154 +364,33 @@
                 { x: 600, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
                 { x: 7400, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BR_EXIT' }
             ];
-            draw();
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw grid
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            for(let i=0; i<=canvas.width; i+=1000/scale) {
-                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
-            }
-
-            // Notice: x, y in game_simulation are CENTER coordinates for walls and exits!
-            // Draw walls
-            ctx.fillStyle = 'rgba(120, 120, 120, 1)';
-            for(let w of walls) ctx.fillRect((w.x - w.w/2)/scale, (w.y - w.h/2)/scale, w.w/scale, w.h/scale);
-
-            // Draw exits
-            ctx.fillStyle = 'rgba(0, 255, 100, 0.4)';
-            ctx.strokeStyle = 'rgba(0, 255, 100, 1)';
-            for(let e of exits) {
-                ctx.fillRect((e.x - e.w/2)/scale, (e.y - e.h/2)/scale, e.w/scale, e.h/scale);
-                ctx.strokeRect((e.x - e.w/2)/scale, (e.y - e.h/2)/scale, e.w/scale, e.h/scale);
-                ctx.fillStyle = 'white';
-                ctx.font = '10px sans-serif';
-                ctx.fillText(e.name, (e.x - e.w/2)/scale + 5, (e.y - e.h/2)/scale + 15);
-                ctx.fillStyle = 'rgba(0, 255, 100, 0.4)';
-            }
-
-            // Draw spawns
-            ctx.fillStyle = 'rgba(50, 150, 255, 1)';
-            for(let s of spawns) {
-                ctx.beginPath(); ctx.arc(s.x/scale, s.y/scale, 4, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = 'white';
-                ctx.fillText(s.name, s.x/scale + 5, s.y/scale - 5);
-                ctx.fillStyle = 'rgba(50, 150, 255, 1)';
-            }
-
-            // Draw boundaries clearly
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.8)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw current object attached to mouse
-            if (isHovering) {
-                const mode = document.getElementById('mode').value;
-                const snap = document.getElementById('snap-grid').checked;
-                let mx = currentX * scale;
-                let my = currentY * scale;
-                if (snap) {
-                    mx = Math.round(mx / 100) * 100;
-                    my = Math.round(my / 100) * 100;
-                }
-
-                // Draw coordinates text next to mouse
-                ctx.fillStyle = 'yellow';
-                ctx.font = '12px sans-serif';
-                ctx.fillText(`(${mx}, ${my})`, currentX + 15, currentY + 15);
-
-                if (mode === 'wall') {
-                    const w = parseInt(document.getElementById('obj-w').value) || 100;
-                    const h = parseInt(document.getElementById('obj-h').value) || 100;
-                    ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
-                    ctx.fillRect((mx - w/2)/scale, (my - h/2)/scale, w/scale, h/scale);
-                } else if (mode === 'exit') {
-                    const w = parseInt(document.getElementById('obj-w').value) || 600;
-                    const h = parseInt(document.getElementById('obj-h').value) || 600;
-                    ctx.fillStyle = 'rgba(0, 255, 100, 0.6)';
-                    ctx.fillRect((mx - w/2)/scale, (my - h/2)/scale, w/scale, h/scale);
-                } else if (mode === 'spawn') {
-                    ctx.fillStyle = 'rgba(255, 255, 0, 0.8)';
-                    ctx.beginPath(); ctx.arc(mx/scale, my/scale, 4, 0, Math.PI*2); ctx.fill();
-                } else if (mode === 'delete') {
-                    ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-                    ctx.beginPath(); ctx.arc(mx/scale, my/scale, 10, 0, Math.PI*2); ctx.fill();
-                }
-            }
-        }
-
-        canvas.onmousemove = (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            currentX = (e.clientX - rect.left) * scaleX;
-            currentY = (e.clientY - rect.top) * scaleY;
-            isHovering = true;
-            draw();
-        };
-
-        canvas.onmouseout = () => {
-            isHovering = false;
-            draw();
-        }
-
-        canvas.onclick = (e) => {
-            const mode = document.getElementById('mode').value;
-            const snap = document.getElementById('snap-grid').checked;
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            currentX = (e.clientX - rect.left) * scaleX;
-            currentY = (e.clientY - rect.top) * scaleY;
-            
-            let mx = currentX * scale;
-            let my = currentY * scale;
-            if (snap) {
-                mx = Math.round(mx / 100) * 100;
-                my = Math.round(my / 100) * 100;
-            }
-
-            if (mode === 'wall') {
-                const w = parseInt(document.getElementById('obj-w').value) || 100;
-                const h = parseInt(document.getElementById('obj-h').value) || 100;
-                walls.push({x: mx, y: my, w: w, h: h, color: [0.5, 0.5, 0.5, 1]});
-            } else if (mode === 'exit') {
-                const w = parseInt(document.getElementById('obj-w').value) || 600;
-                const h = parseInt(document.getElementById('obj-h').value) || 600;
-                const name = document.getElementById('obj-name').value || 'EXIT_' + exits.length;
-                exits.push({x: mx, y: my, w: w, h: h, color: [0, 1, 0.5, 0.3], name: name});
-                document.getElementById('obj-name').value = 'EXIT_' + exits.length;
-            } else if (mode === 'spawn') {
-                const name = document.getElementById('obj-name').value || 'SPAWN_' + spawns.length;
-                spawns.push({x: mx, y: my, name: name});
-                document.getElementById('obj-name').value = 'SPAWN_' + spawns.length;
-            } else if (mode === 'delete') {
-                // Delete object if mouse is inside it
-                walls = walls.filter(w => !(mx >= w.x - w.w/2 && mx <= w.x + w.w/2 && my >= w.y - w.h/2 && my <= w.y + w.h/2));
-                exits = exits.filter(ex => !(mx >= ex.x - ex.w/2 && mx <= ex.x + ex.w/2 && my >= ex.y - ex.h/2 && my <= ex.y + ex.h/2));
-                spawns = spawns.filter(s => Math.hypot(mx - s.x, my - s.y) > 100);
-            }
+            grass = []; safes = []; loots = []; buildings = [];
             draw();
         };
 
         window.exportData = () => {
-            let out = `        this.walls = [\n            ${walls.map(w => `{ x: ${w.x}, y: ${w.y}, w: ${w.w}, h: ${w.h}, color: [0.5, 0.5, 0.5, 1] }`).join(',\n            ')}\n        ];\n\n`;
-            out += `        this.spawnPoints = [\n            ${spawns.map(s => `{ x: ${s.x}, y: ${s.y}, name: '${s.name}' }`).join(',\n            ')}\n        ];\n\n`;
-            out += `        this.extractionZones = [\n            ${exits.map(e => `{ x: ${e.x}, y: ${e.y}, w: ${e.w}, h: ${e.h}, color: [0, 1, 0.5, 0.3], name: '${e.name}' }`).join(',\n            ')}\n        ];`;
+            let out = `        // --- MAP DATA START ---\n`;
+            out += `        this.walls = [\n            ${walls.map(o => `{ x: ${o.x}, y: ${o.y}, w: ${o.w}, h: ${o.h}, color: [0.5, 0.5, 0.5, 1] }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.state.grass = [\n            ${grass.map(o => `{ x: ${o.x}, y: ${o.y}, w: ${o.w}, h: ${o.h}, type: 'bush' }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.spawnPoints = [\n            ${spawns.map(o => `{ x: ${o.x}, y: ${o.y}, name: '${o.name}' }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.extractionZones = [\n            ${exits.map(o => `{ x: ${o.x}, y: ${o.y}, w: ${o.w}, h: ${o.h}, color: [0, 1, 0.5, 0.3], name: '${o.name}' }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.safes = [\n            ${safes.map(o => `{ x: ${o.x}, y: ${o.y} }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.lootPoints = [\n            ${loots.map(o => `{ x: ${o.x}, y: ${o.y}, w: ${o.w}, h: ${o.h}, name: '${o.name}' }`).join(',\n            ')}\n        ];\n\n`;
+            out += `        this.buildings = [\n            ${buildings.map(o => `{ x: ${o.x}, y: ${o.y}, w: ${o.w}, h: ${o.h}, name: '${o.name}' }`).join(',\n            ')}\n        ];\n`;
+            out += `        // --- MAP DATA END ---`;
+            
             document.getElementById('output').value = out;
             document.getElementById('output').select();
             document.execCommand('copy');
-            alert('代碼已生成並複製到剪貼簿！請將其貼上並取代 game_simulation.js 中的對應陣列。');
+            alert('地圖代碼已生成並複製到剪貼簿！');
         };
 
-        window.clearMap = () => { walls=[]; spawns=[]; exits=[]; draw(); };
+        window.clearMap = () => { 
+            walls=[]; spawns=[]; exits=[]; grass=[]; safes=[]; loots=[]; buildings=[]; draw(); 
+        };
 
         // Initialize
+        updateZoom();
         updateUI();
         resetToDefault();
     </script>
