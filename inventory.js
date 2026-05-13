@@ -6,6 +6,7 @@ export class InventorySystem {
 
         // Let's say Stash is 10x10 and Backpack is 6x4 (simplified)
         this.stash = this.createGrid(10, 10);
+        this.loot = this.createGrid(10, 10);
         this.backpack = this.createGrid(6, 4); // 6 cols, 4 rows
 
         // Equipment loadout grids
@@ -491,6 +492,7 @@ export class InventorySystem {
 
         // Backpack capacity gets wiped because the backpack slot is cleared
         this.backpack = this.createGrid(0, 0);
+        this.loot = this.createGrid(10, 10);
         this.primaryWep = this.createGrid(5, 2);
         this.primaryWep2 = this.createGrid(5, 2);
         this.secondaryWep = this.createGrid(2, 2);

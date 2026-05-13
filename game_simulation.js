@@ -18,6 +18,7 @@ export class GameSimulation {
             bots: [],
             effects: [],
             grass: [],
+            groundItems: [],
             time: 0
         };
 
@@ -174,7 +175,8 @@ export class GameSimulation {
             bullets: this.state.bullets,
             bots: this.state.bots,
             effects: this.state.effects,
-            grass: this.state.grass
+            grass: this.state.grass,
+            groundItems: this.state.groundItems
         };
         for (let id in this.state.players) {
             const p = this.state.players[id];
@@ -203,6 +205,7 @@ export class GameSimulation {
         this.state.bots = parsed.bots;
         this.state.effects = parsed.effects;
         this.state.grass = parsed.grass || [];
+        this.state.groundItems = parsed.groundItems || [];
         
         for (let id in parsed.players) {
             if (!this.state.players[id]) this.addPlayer(id);

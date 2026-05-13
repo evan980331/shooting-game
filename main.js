@@ -517,8 +517,9 @@ class Game {
             document.getElementById('extraction-timer').classList.add('hidden');
             const mainMenu = document.getElementById('main-menu');
             const gameContainer = document.getElementById('game-container');
-            if (mainMenu) mainMenu.style.display = '';
-            if (gameContainer) gameContainer.style.display = 'none';
+            if (mainMenu) mainMenu.classList.remove('hidden');
+            if (gameContainer) gameContainer.classList.add('hidden');
+            this.isInMenu = true;
             if (this.ui) this.ui.refreshInventory();
             
             // Reset camera
@@ -549,6 +550,126 @@ class Game {
         this.writeCameraUniforms();
 
         this.updateHUD();
+    }
+
+    dropItemToGround(itemId) {
+        const itemIndex = this.inventory.items.findIndex(i => i.id == itemId);
+        if (itemIndex === -1) return;
+        const item = this.inventory.items[itemIndex];
+        
+        this.inventory.freeGrid(item, this.inventory[item.container]);
+        this.inventory.items.splice(itemIndex, 1);
+        this.inventory.updatePlayerWeight();
+
+        const offsetX = (Math.random() - 0.5) * 40;
+        const offsetY = (Math.random() - 0.5) * 40;
+        const gItem = {
+            id: this.sim.nextGroundItemId ? this.sim.nextGroundItemId++ : (this.sim.nextGroundItemId = 1),
+            typeId: item.typeId,
+            x: this.player.x + offsetX,
+            y: this.player.y + offsetY,
+            amount: item.amount,
+            currentMag: item.currentMag,
+            durability: item.durability,
+            maxDurability: item.maxDurability,
+            capacity: item.capacity
+        };
+        if (!this.sim.state.groundItems) this.sim.state.groundItems = [];
+        this.sim.state.groundItems.push(gItem);
+    }
+
+    populateLootGrid() {
+        if (!this.sim.state.groundItems) this.sim.state.groundItems = [];
+        const nearby = this.sim.state.groundItems.filter(g => Math.hypot(g.x - this.player.x, g.y - this.player.y) < 150);
+        
+        for (let g of nearby) {
+            const dbItem = ItemDatabase[g.typeId];
+            if (!dbItem) continue;
+            const slot = this.inventory.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inventory.loot);
+            if (slot) {
+                this.sim.state.groundItems = this.sim.state.groundItems.filter(gi => gi.id !== g.id);
+                const item = { 
+                    id: this.inventory.nextId++, 
+                    typeId: g.typeId, 
+                    x: slot.x, 
+                    y: slot.y, 
+                    container: 'loot', 
+                    rotated: slot.rotated,
+                    amount: g.amount,
+                    currentMag: g.currentMag,
+                    durability: g.durability,
+                    maxDurability: g.maxDurability,
+                    capacity: g.capacity
+                };
+                this.inventory.items.push(item);
+                this.inventory.occupyGrid(item, this.inventory.loot);
+            }
+        }
+    }
+
+    flushLootGrid() {
+        const lootItems = this.inventory.items.filter(i => i.container === 'loot');
+        for (let i of lootItems) {
+            this.dropItemToGround(i.id);
+        }
+    }
+
+    pickupClosestItem() {
+        if (!this.sim.state.groundItems || this.sim.state.groundItems.length === 0) return;
+        let closest = null;
+        let minDist = 100; // pickup radius
+        
+        for (let g of this.sim.state.groundItems) {
+            let dist = Math.hypot(g.x - this.player.x, g.y - this.player.y);
+            if (dist < minDist) {
+                minDist = dist;
+                closest = g;
+            }
+        }
+        
+        if (closest) {
+            const dbItem = ItemDatabase[closest.typeId];
+            if (!dbItem) return;
+            const slot = this.inventory.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inventory.backpack);
+            if (slot) {
+                this.sim.state.groundItems = this.sim.state.groundItems.filter(gi => gi.id !== closest.id);
+                const item = { 
+                    id: this.inventory.nextId++, 
+                    typeId: closest.typeId, 
+                    x: slot.x, 
+                    y: slot.y, 
+                    container: 'backpack', 
+                    rotated: slot.rotated,
+                    amount: closest.amount,
+                    currentMag: closest.currentMag,
+                    durability: closest.durability,
+                    maxDurability: closest.maxDurability,
+                    capacity: closest.capacity
+                };
+                this.inventory.items.push(item);
+                this.inventory.occupyGrid(item, this.inventory.backpack);
+                this.inventory.updatePlayerWeight();
+                this.updateHUD();
+                
+                let existing = document.getElementById('pickup-toast');
+                if (existing) existing.remove();
+                const el = document.createElement('div');
+                el.id = 'pickup-toast';
+                el.textContent = '📦 拾取: ' + (dbItem.name || dbItem.id);
+                el.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(0,255,100,0.8); color:#000; padding:8px 16px; border-radius:8px; font-weight:bold; z-index:9999; pointer-events:none; animation:fadeOutToast 2s forwards;';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 2000);
+            } else {
+                let existing = document.getElementById('pickup-error');
+                if (existing) existing.remove();
+                const el = document.createElement('div');
+                el.id = 'pickup-error';
+                el.textContent = '⚠️ 背包空間不足';
+                el.style.cssText = 'position:fixed; bottom:120px; left:50%; transform:translateX(-50%); background:rgba(255,0,0,0.8); color:#fff; padding:8px 16px; border-radius:8px; font-weight:bold; z-index:9999; pointer-events:none; animation:fadeOutToast 2s forwards;';
+                document.body.appendChild(el);
+                setTimeout(() => el.remove(), 2000);
+            }
+        }
     }
 
     resetSession() {
@@ -776,6 +897,84 @@ class Game {
         if (armorCross) {
             armorCross.style.display = (hasArmor && this.player.hasTorsoInjury) ? 'block' : 'none';
         }
+
+        // Ground item labels
+        let labelsContainer = document.getElementById('ground-item-labels');
+        if (labelsContainer) {
+            if (this.sim.state.groundItems && this.sim.state.groundItems.length > 0) {
+                const zoom = (this.player.cameraZoom && !isNaN(this.player.cameraZoom)) ? this.player.cameraZoom : 1.5;
+                let i = 0;
+                for (let g of this.sim.state.groundItems) {
+                    const px = (g.x - this.cameraX) / zoom;
+                    const py = (g.y - this.cameraY) / zoom;
+                    
+                    if (px > -50 && px < this.canvas.width + 50 && py > -50 && py < this.canvas.height + 50) {
+                        const dbItem = ItemDatabase[g.typeId];
+                        const name = dbItem ? dbItem.name : "未知";
+                        
+                        let el = labelsContainer.children[i];
+                        if (!el) {
+                            el = document.createElement('div');
+                            el.style.position = 'absolute';
+                            el.style.transform = 'translate(-50%, -50%)';
+                            el.style.color = '#fff';
+                            el.style.fontWeight = 'bold';
+                            el.style.textShadow = '1px 1px 2px #000, -1px -1px 2px #000, 0px 0px 4px #000';
+                            el.style.pointerEvents = 'none';
+                            el.style.textAlign = 'center';
+                            el.style.lineHeight = '1.1';
+                            
+                            // Circle styling
+                            el.style.display = 'flex';
+                            el.style.flexDirection = 'column';
+                            el.style.alignItems = 'center';
+                            el.style.justifyContent = 'center';
+                            el.style.borderRadius = '50%';
+                            el.style.backgroundColor = 'rgba(200, 200, 200, 0.85)';
+                            el.style.border = '2px solid #555';
+                            el.style.color = '#111'; // dark text for contrast on light circle
+                            el.style.textShadow = 'none'; // remove shadow for cleaner look
+                            el.style.overflow = 'hidden';
+                            
+                            labelsContainer.appendChild(el);
+                        }
+                        
+                        const size = Math.max(40, 36 * zoom);
+                        el.style.width = size + 'px';
+                        el.style.height = size + 'px';
+                        el.style.left = px + 'px';
+                        el.style.top = py + 'px';
+                        
+                        // Font scaling
+                        let fsize = 10 * zoom;
+                        if (name.length > 5) fsize = 8 * zoom;
+                        el.style.fontSize = Math.min(14, fsize) + 'px';
+
+                        // Add amount if stackable
+                        let displayText = name;
+                        if (g.amount && g.amount > 1) {
+                            displayText += `\n<span style="font-size:0.8em">x${g.amount}</span>`;
+                        }
+                        
+                        if (el.innerHTML !== displayText) {
+                            el.innerHTML = displayText;
+                        }
+                        el.style.display = 'flex';
+                        i++;
+                    }
+                }
+                // Hide unused labels
+                while (i < labelsContainer.children.length) {
+                    labelsContainer.children[i].style.display = 'none';
+                    i++;
+                }
+            } else {
+                // Clear all if no items
+                for (let child of labelsContainer.children) {
+                    child.style.display = 'none';
+                }
+            }
+        }
     }
 
     renderFullMap() {
@@ -996,6 +1195,9 @@ class Game {
                 });
             }
         }
+
+        // Ground Items (now rendered purely via HTML overlay)
+        // (Removed WebGPU rendering for ground items to avoid duplication and allow dynamic text circles)
 
         // Zones
         for (let z of this.extractionZones) {

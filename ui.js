@@ -18,6 +18,8 @@ export class UIManager {
         this.overlayStashGrid = document.getElementById('overlay-stash-grid');
         this.overlayBackpackGrid = document.getElementById('overlay-backpack-grid');
 
+        this.lootGrid = document.getElementById('loot-grid');
+
         this.primaryGrid = document.getElementById('primary-grid');
         this.primaryGrid2 = document.getElementById('primary-grid-2');
         this.secondaryGrid = document.getElementById('secondary-grid');
@@ -166,39 +168,47 @@ export class UIManager {
                         this.inventoryPanel.style.width = '100%';
                         this.inventoryPanel.style.height = '100%';
                         this.inventoryPanel.style.transform = 'none';
-                        this.inventoryPanel.style.background = '#1e1e1e'; // 直接覆蓋原畫面底色
+                        this.inventoryPanel.style.background = 'rgba(30, 30, 30, 0.95)'; // slightly transparent
                         this.inventoryPanel.style.zIndex = '2000'; // 確保在 canvas 與 hud 上層
                         this.inventoryPanel.style.justifyContent = 'center';
-                        this.inventoryPanel.style.alignItems = 'center';
-                        this.inventoryPanel.style.paddingTop = '0';
+                        this.inventoryPanel.style.alignItems = 'flex-start';
+                        this.inventoryPanel.style.paddingTop = '40px';
+                        this.inventoryPanel.style.boxSizing = 'border-box';
                         this.inventoryPanel.classList.remove('hidden');
                         this.inventoryPanel.style.display = 'flex';
                         
-                        // Create solid background wrapper container
-                        if (!this.inRaidBgWrapper) {
-                            this.inRaidBgWrapper = document.createElement('div');
-                            this.inRaidBgWrapper.style.background = '#2a2a2a';
-                            this.inRaidBgWrapper.style.padding = '20px';
-                            this.inRaidBgWrapper.style.border = '2px solid #555';
-                            this.inRaidBgWrapper.style.display = 'flex';
-                            this.inRaidBgWrapper.style.gap = '20px';
-                            this.inRaidBgWrapper.style.boxShadow = '0 0 20px rgba(0,0,0,0.8)';
-                        }
-                        this.inventoryPanel.appendChild(this.inRaidBgWrapper);
+                        document.getElementById('stash-header').style.display = 'none';
+                        document.getElementById('stash-grid').style.display = 'none';
+                        document.getElementById('loot-header').classList.remove('hidden');
+                        document.getElementById('loot-header').style.display = 'flex';
+                        document.getElementById('loot-grid').classList.remove('hidden');
+                        document.getElementById('loot-grid').style.display = 'grid';
                         
-                        const equipCol = document.getElementById('equip-column');
-                        if (equipCol) this.inRaidBgWrapper.appendChild(equipCol);
-                        
-                        const bpPanel = document.getElementById('backpack-panel');
-                        if (bpPanel) this.inRaidBgWrapper.appendChild(bpPanel);
-                        
-                        const stashParent = document.getElementById('stash-grid').closest('.left-panel') || document.getElementById('stash-grid').parentElement;
-                        if (stashParent) stashParent.style.display = 'none';
+                        // Ensure backpack is visible (it should be since we don't hide it, but just in case)
+                        document.getElementById('backpack-panel').style.display = 'block';
+
+                        this.game.populateLootGrid();
                         
                         this.game.isInventoryOpen = true;
                         this.refreshInventory();
                     } else {
-                        this.closeInRaidInventory();
+                        this.game.flushLootGrid();
+                        
+                        this.inventoryPanel.classList.add('hidden');
+                        this.inventoryPanel.style.display = 'none';
+                        const menuContentArea = document.getElementById('menu-content-area');
+                        if (menuContentArea) {
+                            menuContentArea.appendChild(this.inventoryPanel);
+                        }
+                        this.inventoryPanel.style.position = '';
+                        this.inventoryPanel.style.background = '';
+                        this.inventoryPanel.style.paddingTop = '';
+                        this.game.isInventoryOpen = false;
+                        
+                        if (this.attachedItemId !== null) {
+                            this.clearAttachment();
+                            this.refreshInventory();
+                        }
                     }
                     return;
                 }
@@ -220,7 +230,11 @@ export class UIManager {
                     } else if (shopItemDiv && shopItemDiv.dataset.typeid) {
                         const dbItem = ItemDatabase[shopItemDiv.dataset.typeid];
                         this.showItemStats(this.lastMouseE.pageX, this.lastMouseE.pageY, dbItem, null);
+                    } else if (!this.game.isInMenu) {
+                        this.game.pickupClosestItem();
                     }
+                } else if (!this.game.isInMenu) {
+                    this.game.pickupClosestItem();
                 }
             }
         });
@@ -309,6 +323,14 @@ export class UIManager {
                     }
                     this.hoverSwapTargetId = null;
                 } else {
+                    if (!this.game.isInMenu) {
+                        this.game.dropItemToGround(this.attachedItemId);
+                        this.clearAttachment();
+                        this.refreshInventory();
+                        this.game.updateHUD();
+                        return;
+                    }
+                    
                     const elem = document.elementFromPoint(e.clientX, e.clientY);
                     const invItemDiv = elem ? elem.closest('.inventory-item') : null;
                     if (invItemDiv && invItemDiv.dataset.itemid) {
@@ -365,6 +387,7 @@ export class UIManager {
         this.setupDropZone(this.hotbarGrid, 'hotbarSlot');
         this.setupDropZone(this.backpackEquipGrid, 'backpackSlot');
         this.setupDropZone(this.secureGrid, 'secureContainer');
+        if (this.lootGrid) this.setupDropZone(this.lootGrid, 'loot');
 
         if (this.secureSelect) {
             this.secureSelect.addEventListener('change', (e) => {
@@ -472,6 +495,7 @@ export class UIManager {
                 else if (gridContainer.id.includes('helmet')) containerName = 'helmetSlot';
                 else if (gridContainer.id.includes('hotbar')) containerName = 'hotbarSlot';
                 else if (gridContainer.id === 'secure-grid') containerName = 'secureContainer';
+                else if (gridContainer.id === 'loot-grid') containerName = 'loot';
 
                 if (containerName) {
                     const rect = gridContainer.getBoundingClientRect();
@@ -594,6 +618,11 @@ export class UIManager {
 
         const stashParent = document.getElementById('stash-grid').closest('.left-panel') || document.getElementById('stash-grid').parentElement;
         if (stashParent) stashParent.style.display = '';
+        
+        document.getElementById('stash-header').style.display = 'flex';
+        document.getElementById('stash-grid').style.display = 'grid';
+        document.getElementById('loot-header').classList.add('hidden');
+        document.getElementById('loot-grid').classList.add('hidden');
         
         this.game.isInventoryOpen = false;
     }
@@ -844,7 +873,7 @@ export class UIManager {
             this.stashGrid, this.backpackGrid, this.primaryGrid, this.primaryGrid2,
             this.secondaryGrid, this.meleeGrid, this.armorGrid, this.helmetGrid,
             this.hotbarGrid, this.backpackEquipGrid, this.secureGrid,
-            overlayBackpackGrid, overlayStashGrid, overlayHelmetGrid
+            overlayBackpackGrid, overlayStashGrid, overlayHelmetGrid, this.lootGrid
         ];
 
         allGrids.forEach(g => { if (g) g.innerHTML = ''; });
@@ -853,14 +882,15 @@ export class UIManager {
             'primaryWep': [this.primaryGrid],
             'primaryWep2': [this.primaryGrid2],
             'secondaryWep': [this.secondaryGrid],
-            'meleeWep': [this.meleeGrid],
+            'meleeSlot': [this.meleeGrid],
             'armorSlot': [this.armorGrid],
             'helmetSlot': [this.helmetGrid, overlayHelmetGrid],
             'hotbarSlot': [this.hotbarGrid],
             'backpackSlot': [this.backpackEquipGrid],
-            'secureSlot': [this.secureGrid],
+            'secureContainer': [this.secureGrid],
             'backpack': [this.backpackGrid, overlayBackpackGrid],
-            'stash': [this.stashGrid, overlayStashGrid]
+            'stash': [this.stashGrid, overlayStashGrid],
+            'loot': [this.lootGrid]
         };
 
         // Dynamic Backpack Storage Scaling

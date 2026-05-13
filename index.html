@@ -126,8 +126,8 @@
                         </div>
 
                         <!-- Right: Stash -->
-                        <div class="inventory-section" style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
+                        <div class="inventory-section" id="inventory-right-section" style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
+                            <div id="stash-header" style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
                                 <span style="font-weight: bold;">倉庫 (Stash)</span>
                                 <div style="display: flex; gap: 10px;">
                                     <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">整理</button>
@@ -135,6 +135,11 @@
                                 </div>
                             </div>
                             <div id="stash-grid" class="grid-container"></div>
+                            
+                            <div id="loot-header" class="hidden" style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
+                                <span style="font-weight: bold;">地上物資 (Loot)</span>
+                            </div>
+                            <div id="loot-grid" class="grid-container hidden"></div>
                         </div>
                     </div>
                 </div>
@@ -317,14 +322,14 @@
 
             <!-- Center Screen Text -->
             <div id="game-over" class="hidden"
-                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center;">
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center; pointer-events: auto;">
                 已死亡，系統重置中...
                 <br>
                 <button id="btn-back-menu-fail" class="play-btn"
                     style="margin-top: 20px; font-size: 20px;">返回主選單</button>
             </div>
             <div id="game-win" class="hidden"
-                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: lime; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center;">
+                style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: lime; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center; pointer-events: auto;">
                 成功撤離！
                 <br>
                 <button id="btn-back-menu-win" class="play-btn"
@@ -375,6 +380,8 @@
         </div> <!-- End ui-overlay -->
 
         <div id="error-msg"></div>
+
+        <div id="ground-item-labels" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; height: 600px; pointer-events: none; z-index: 100;"></div>
 
         <canvas id="game-canvas" width="800" height="600"></canvas>
     </div> <!-- End game-container -->
