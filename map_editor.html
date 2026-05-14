@@ -94,8 +94,24 @@
 
             <div class="section" style="display: flex; flex-direction: column; gap: 8px;">
                 <button class="primary" onclick="exportData()">💾 匯出並複製代碼</button>
+                <button onclick="undo()">↩️ 復原 (Ctrl+Z)</button>
                 <button onclick="resetToDefault()">🔄 重置為預設地圖</button>
                 <button class="danger" onclick="clearMap()">🗑️ 清除全部物件</button>
+            </div>
+
+            <div class="section">
+                <div class="section-title">本機/雲端存檔</div>
+                <input type="text" id="save-name" placeholder="輸入版本名稱..." style="width: 100%; margin-bottom: 8px;">
+                <div style="display:flex; gap: 8px;">
+                    <button onclick="saveMap()" style="flex:1; background: #2a8a2a; border-color: #3b9b3b;">📥 儲存</button>
+                    <button onclick="loadMap()" style="flex:1; background: #8a6a2a; border-color: #9b7b3b;">📤 讀取</button>
+                </div>
+                <div style="margin-top: 15px; font-size: 0.9em; color: #ccc;">
+                    <div style="margin-bottom: 5px; font-weight: bold;">歷屆存檔版本：</div>
+                    <ul id="save-history-list" style="list-style: none; padding: 0; margin: 0; max-height: 150px; overflow-y: auto; border-top: 1px dashed #555; padding-top: 8px;">
+                        <!-- Save list populated here -->
+                    </ul>
+                </div>
             </div>
 
             <div class="stats" id="stats-panel">
@@ -133,6 +149,43 @@
         let currentWorldY = 0;
         let zoom = 1.0;
         let isHovering = false;
+        
+        let historyStack = [];
+        let isMouseDown = false;
+        let lastPlaced = { x: -9999, y: -9999 };
+
+        function saveState() {
+            historyStack.push({
+                walls: JSON.parse(JSON.stringify(walls)),
+                spawns: JSON.parse(JSON.stringify(spawns)),
+                exits: JSON.parse(JSON.stringify(exits)),
+                grass: JSON.parse(JSON.stringify(grass)),
+                safes: JSON.parse(JSON.stringify(safes)),
+                loots: JSON.parse(JSON.stringify(loots)),
+                buildings: JSON.parse(JSON.stringify(buildings))
+            });
+            if (historyStack.length > 50) historyStack.shift();
+        }
+
+        window.undo = () => {
+            if (historyStack.length > 0) {
+                let state = historyStack.pop();
+                walls = state.walls;
+                spawns = state.spawns;
+                exits = state.exits;
+                grass = state.grass;
+                safes = state.safes;
+                loots = state.loots;
+                buildings = state.buildings;
+                draw();
+            }
+        };
+
+        window.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.key === 'z') {
+                window.undo();
+            }
+        });
 
         function updateZoom() {
             zoom = parseFloat(document.getElementById('zoom-range').value);
@@ -280,12 +333,36 @@
             
             document.getElementById('cursor-pos').innerText = `POS: ${Math.round(currentWorldX)}, ${Math.round(currentWorldY)}`;
             isHovering = true;
+            
+            if (isMouseDown) {
+                const mode = document.getElementById('mode').value;
+                const w = parseInt(document.getElementById('obj-w').value) || 100;
+                const h = parseInt(document.getElementById('obj-h').value) || 100;
+                // Deleting should trigger rapidly, others should have spacing
+                const spacing = mode === 'delete' ? 20 : Math.max(20, Math.min(w, h));
+                
+                if (Math.hypot(currentWorldX - lastPlaced.x, currentWorldY - lastPlaced.y) >= spacing) {
+                    placeObject();
+                }
+            }
             draw();
         };
 
         canvas.onmouseout = () => { isHovering = false; draw(); };
+        
+        canvas.onmousedown = (e) => {
+            if (e.button !== 0) return; // Only left click
+            isMouseDown = true;
+            saveState();
+            placeObject();
+        };
 
-        canvas.onclick = (e) => {
+        canvas.onmouseup = () => {
+            isMouseDown = false;
+            lastPlaced = { x: -9999, y: -9999 };
+        };
+
+        function placeObject() {
             const mode = document.getElementById('mode').value;
             const snap = document.getElementById('snap-grid').checked;
             
@@ -324,8 +401,9 @@
                 exits = exits.filter(o => dist(mx, my, o.x, o.y) > 100);
                 spawns = spawns.filter(o => dist(mx, my, o.x, o.y) > 50);
             }
+            lastPlaced = { x: currentWorldX, y: currentWorldY };
             draw();
-        };
+        }
 
         function updateStats() {
             const stats = `牆壁: ${walls.length} | 草叢: ${grass.length} | 出口: ${exits.length} | 生成: ${spawns.length} | 建物: ${buildings.length}`;
@@ -386,12 +464,104 @@
         };
 
         window.clearMap = () => { 
+            saveState();
             walls=[]; spawns=[]; exits=[]; grass=[]; safes=[]; loots=[]; buildings=[]; draw(); 
         };
+
+        window.saveMap = () => {
+            const name = document.getElementById('save-name').value;
+            if (!name) { alert('請輸入版本名稱！'); return; }
+            const state = { walls, spawns, exits, grass, safes, loots, buildings };
+            localStorage.setItem('map_save_' + name, JSON.stringify(state));
+            alert('已儲存版本: ' + name);
+            updateSaveHistory();
+        };
+
+        window.loadMap = () => {
+            const name = document.getElementById('save-name').value;
+            if (!name) { alert('請輸入要讀取的版本名稱！'); return; }
+            const data = localStorage.getItem('map_save_' + name);
+            if (data) {
+                saveState();
+                const state = JSON.parse(data);
+                walls = state.walls || [];
+                spawns = state.spawns || [];
+                exits = state.exits || [];
+                grass = state.grass || [];
+                safes = state.safes || [];
+                loots = state.loots || [];
+                buildings = state.buildings || [];
+                draw();
+                alert('已讀取版本: ' + name);
+            } else {
+                alert('找不到存檔: ' + name);
+            }
+        };
+
+        function updateSaveHistory() {
+            const list = document.getElementById('save-history-list');
+            if (!list) return;
+            list.innerHTML = '';
+            
+            let saves = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && key.startsWith('map_save_')) {
+                    saves.push(key.replace('map_save_', ''));
+                }
+            }
+            
+            if (saves.length === 0) {
+                list.innerHTML = '<li style="color: #666; font-style: italic; text-align: center;">無存檔紀錄</li>';
+                return;
+            }
+            
+            // Sort by name or time if possible (here by name)
+            saves.sort().forEach(name => {
+                const li = document.createElement('li');
+                li.style.display = 'flex';
+                li.style.justifyContent = 'space-between';
+                li.style.alignItems = 'center';
+                li.style.padding = '4px 0';
+                li.style.borderBottom = '1px solid #333';
+                
+                const nameSpan = document.createElement('span');
+                nameSpan.innerText = name;
+                nameSpan.style.cursor = 'pointer';
+                nameSpan.style.color = '#4da6ff';
+                nameSpan.style.flex = '1';
+                nameSpan.title = '點擊載入此版本';
+                nameSpan.onclick = () => {
+                    document.getElementById('save-name').value = name;
+                    window.loadMap();
+                };
+                
+                const delBtn = document.createElement('button');
+                delBtn.innerText = '刪除';
+                delBtn.style.padding = '2px 6px';
+                delBtn.style.background = '#8a2a2a';
+                delBtn.style.border = '1px solid #aa3a3a';
+                delBtn.style.color = '#fff';
+                delBtn.style.cursor = 'pointer';
+                delBtn.style.fontSize = '0.7em';
+                delBtn.style.borderRadius = '3px';
+                delBtn.onclick = () => {
+                    if (confirm(`確定要刪除存檔 [${name}] 嗎？`)) {
+                        localStorage.removeItem('map_save_' + name);
+                        updateSaveHistory();
+                    }
+                };
+                
+                li.appendChild(nameSpan);
+                li.appendChild(delBtn);
+                list.appendChild(li);
+            });
+        }
 
         // Initialize
         updateZoom();
         updateUI();
+        updateSaveHistory();
         resetToDefault();
     </script>
 </body>

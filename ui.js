@@ -1005,23 +1005,26 @@ export class UIManager {
             }
 
             // Delete / Sell button
-            const delBtn = document.createElement('button');
-            delBtn.className = 'item-delete-btn';
-            delBtn.innerText = '$';
-            delBtn.title = "出售 (30%)";
-            delBtn.onclick = (e) => {
-                e.stopPropagation(); // Prevent pickup when selling
-                this.inv.sellItem(item.id);
-                this.refreshShop();
-                this.clearAttachment(); // drop it if held
-                this.refreshInventory();
-                this.game.updateHUD();
-            };
-            div.appendChild(delBtn);
+            if (item.typeId !== '刀') {
+                const delBtn = document.createElement('button');
+                delBtn.className = 'item-delete-btn';
+                delBtn.innerText = '$';
+                delBtn.title = "出售 (30%)";
+                delBtn.onclick = (e) => {
+                    e.stopPropagation(); // Prevent pickup when selling
+                    this.inv.sellItem(item.id);
+                    this.refreshShop();
+                    this.clearAttachment(); // drop it if held
+                    this.refreshInventory();
+                    this.game.updateHUD();
+                };
+                div.appendChild(delBtn);
+            }
 
             // Right click to use medical items directly
             div.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
+                if (item.typeId === '刀') return;
                 const dbItemObj = ItemDatabase[item.typeId];
                 if (dbItemObj && (dbItemObj.type === 'medical' || dbItemObj.type === 'medical-buff')) {
                     this.game.useItemDirectly(item);
@@ -1030,6 +1033,7 @@ export class UIManager {
 
             // Double click to quick-equip (with overflow handling)
             div.addEventListener('dblclick', (e) => {
+                if (item.typeId === '刀') return;
                 // Cancel any pending hold-drag
                 this._cancelHold();
                 if (this.attachedItemId !== null) return;
@@ -1076,6 +1080,7 @@ export class UIManager {
 
             // Click to Pickup (with 0.5s hold-to-drag)
             div.addEventListener('mousedown', (e) => {
+                if (item.typeId === '刀') return;
                 if (this.attachedItemId !== null || e.target.classList.contains('item-delete-btn')) return;
                 if (e.button !== 0) return;
 

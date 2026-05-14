@@ -945,6 +945,29 @@ class Game {
                         el.style.left = px + 'px';
                         el.style.top = py + 'px';
                         
+                        // Layering optimization (Z-Index based on Y position)
+                        el.style.zIndex = Math.round(g.y);
+
+                        // Occlusion handling
+                        let distToPlayer = Math.hypot(g.x - this.player.x, g.y - this.player.y);
+                        let inBush = false;
+                        if (this.sim.state.grass) {
+                            for (let bush of this.sim.state.grass) {
+                                if (Math.hypot(g.x - bush.x, g.y - bush.y) < (bush.w + bush.h)/4) {
+                                    inBush = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (inBush && distToPlayer > 120) {
+                            el.style.opacity = '0.15'; // Mostly hidden in bush
+                        } else if (distToPlayer < 40) {
+                            el.style.opacity = '0.3'; // Translucent if player is standing on it
+                        } else {
+                            el.style.opacity = '0.9';
+                        }
+                        
                         // Font scaling
                         let fsize = 10 * zoom;
                         if (name.length > 5) fsize = 8 * zoom;
