@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Map Editor v9.5</title>
+    <title>Map Editor v9.7</title>
     <style>
         body { background: #1a1a1a; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
         .container { display: flex; gap: 20px; max-width: 1200px; width: 100%; }
@@ -133,6 +133,28 @@
     </div>
 
     <script>
+        // ======== Supabase Config ========
+        const SUPABASE_URL = 'https://dntaqhzsbswfnwtbfgbv.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRudGFxaHpzYnN3Zm53dGJmZ2J2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg3NzIxODUsImV4cCI6MjA5NDM0ODE4NX0.7bFRfqvobwdDA3zyGanJfmfCqkka-G8p5Z-o08CluYs';
+
+        async function sbRequest(method, path, body = null) {
+            const opts = {
+                method,
+                headers: {
+                    'apikey': SUPABASE_KEY,
+                    'Authorization': `Bearer ${SUPABASE_KEY}`,
+                    'Content-Type': 'application/json',
+                    'Prefer': method === 'POST' ? 'resolution=merge-duplicates,return=representation' : 'return=representation'
+                }
+            };
+            if (body) opts.body = JSON.stringify(body);
+            const res = await fetch(SUPABASE_URL + '/rest/v1/' + path, opts);
+            const text = await res.text();
+            if (!res.ok) throw new Error(text);
+            return text ? JSON.parse(text) : null;
+        }
+        // =================================
+
         const canvas = document.getElementById('editor');
         const ctx = canvas.getContext('2d');
         const MAP_SIZE = 8000;
@@ -468,91 +490,103 @@
             walls=[]; spawns=[]; exits=[]; grass=[]; safes=[]; loots=[]; buildings=[]; draw(); 
         };
 
-        window.saveMap = () => {
-            const name = document.getElementById('save-name').value;
+        window.saveMap = async () => {
+            const name = document.getElementById('save-name').value.trim();
             if (!name) { alert('請輸入版本名稱！'); return; }
             const state = { walls, spawns, exits, grass, safes, loots, buildings };
-            localStorage.setItem('map_save_' + name, JSON.stringify(state));
-            alert('已儲存版本: ' + name);
-            updateSaveHistory();
-        };
-
-        window.loadMap = () => {
-            const name = document.getElementById('save-name').value;
-            if (!name) { alert('請輸入要讀取的版本名稱！'); return; }
-            const data = localStorage.getItem('map_save_' + name);
-            if (data) {
-                saveState();
-                const state = JSON.parse(data);
-                walls = state.walls || [];
-                spawns = state.spawns || [];
-                exits = state.exits || [];
-                grass = state.grass || [];
-                safes = state.safes || [];
-                loots = state.loots || [];
-                buildings = state.buildings || [];
-                draw();
-                alert('已讀取版本: ' + name);
-            } else {
-                alert('找不到存檔: ' + name);
+            try {
+                await sbRequest('POST', 'map_saves?on_conflict=name', { name, data: state });
+                alert('✅ 已儲存至雲端: ' + name);
+                updateSaveHistory();
+            } catch(e) {
+                console.error(e);
+                alert('❌ 雲端儲存失敗: ' + e.message);
             }
         };
 
-        function updateSaveHistory() {
+        window.loadMap = async () => {
+            const name = document.getElementById('save-name').value.trim();
+            if (!name) { alert('請輸入要讀取的版本名稱！'); return; }
+            try {
+                const rows = await sbRequest('GET', `map_saves?name=eq.${encodeURIComponent(name)}&select=data`);
+                if (!rows || rows.length === 0) { alert('❌ 找不到存檔: ' + name); return; }
+                saveState();
+                const s = rows[0].data;
+                walls = s.walls || [];
+                spawns = s.spawns || [];
+                exits = s.exits || [];
+                grass = s.grass || [];
+                safes = s.safes || [];
+                loots = s.loots || [];
+                buildings = s.buildings || [];
+                draw();
+                alert('✅ 已從雲端讀取: ' + name);
+            } catch(e) {
+                console.error(e);
+                alert('❌ 讀取失敗: ' + e.message);
+            }
+        };
+
+        async function updateSaveHistory() {
             const list = document.getElementById('save-history-list');
             if (!list) return;
-            list.innerHTML = '';
+            list.innerHTML = '<li style="color:#888; text-align:center">載入中...</li>';
             
             let saves = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && key.startsWith('map_save_')) {
-                    saves.push(key.replace('map_save_', ''));
-                }
-            }
-            
-            if (saves.length === 0) {
-                list.innerHTML = '<li style="color: #666; font-style: italic; text-align: center;">無存檔紀錄</li>';
+            try {
+                saves = await sbRequest('GET', 'map_saves?select=name,created_at&order=created_at.desc');
+            } catch(e) {
+                list.innerHTML = `<li style="color:#f44; font-size:0.85em">❌ 無法連接雲端: ${e.message}</li>`;
                 return;
             }
             
-            // Sort by name or time if possible (here by name)
-            saves.sort().forEach(name => {
+            if (!saves || saves.length === 0) {
+                list.innerHTML = '<li style="color: #666; font-style: italic; text-align: center;">無存檔紀錄</li>';
+                return;
+            }
+
+            list.innerHTML = '';
+            saves.forEach(row => {
+                const name = row.name;
+                const date = row.created_at ? new Date(row.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : '';
+
                 const li = document.createElement('li');
-                li.style.display = 'flex';
-                li.style.justifyContent = 'space-between';
-                li.style.alignItems = 'center';
-                li.style.padding = '4px 0';
-                li.style.borderBottom = '1px solid #333';
-                
+                li.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid #333;';
+
+                const left = document.createElement('div');
+                left.style.flex = '1';
+
                 const nameSpan = document.createElement('span');
                 nameSpan.innerText = name;
-                nameSpan.style.cursor = 'pointer';
-                nameSpan.style.color = '#4da6ff';
-                nameSpan.style.flex = '1';
+                nameSpan.style.cssText = 'cursor:pointer; color:#4da6ff; font-weight:bold; display:block;';
                 nameSpan.title = '點擊載入此版本';
                 nameSpan.onclick = () => {
                     document.getElementById('save-name').value = name;
                     window.loadMap();
                 };
-                
+
+                const dateSpan = document.createElement('span');
+                dateSpan.innerText = date;
+                dateSpan.style.cssText = 'font-size:0.75em; color:#777;';
+
+                left.appendChild(nameSpan);
+                left.appendChild(dateSpan);
+
                 const delBtn = document.createElement('button');
                 delBtn.innerText = '刪除';
-                delBtn.style.padding = '2px 6px';
-                delBtn.style.background = '#8a2a2a';
-                delBtn.style.border = '1px solid #aa3a3a';
-                delBtn.style.color = '#fff';
-                delBtn.style.cursor = 'pointer';
-                delBtn.style.fontSize = '0.7em';
-                delBtn.style.borderRadius = '3px';
-                delBtn.onclick = () => {
-                    if (confirm(`確定要刪除存檔 [${name}] 嗎？`)) {
-                        localStorage.removeItem('map_save_' + name);
-                        updateSaveHistory();
+                delBtn.style.cssText = 'padding:2px 6px; background:#8a2a2a; border:1px solid #aa3a3a; color:#fff; cursor:pointer; font-size:0.7em; border-radius:3px; margin-left:6px;';
+                delBtn.onclick = async () => {
+                    if (confirm(`確定要刪除雲端存檔 [${name}] 嗎？`)) {
+                        try {
+                            await sbRequest('DELETE', `map_saves?name=eq.${encodeURIComponent(name)}`);
+                            updateSaveHistory();
+                        } catch(e) {
+                            alert('❌ 刪除失敗: ' + e.message);
+                        }
                     }
                 };
-                
-                li.appendChild(nameSpan);
+
+                li.appendChild(left);
                 li.appendChild(delBtn);
                 list.appendChild(li);
             });
