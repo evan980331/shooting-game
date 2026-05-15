@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>Map Editor v9.7</title>
+    <title>Map Editor v10.2</title>
     <style>
         body { background: #1a1a1a; color: #eee; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
         .container { display: flex; gap: 20px; max-width: 1200px; width: 100%; }
@@ -204,8 +204,18 @@
         };
 
         window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+
             if (e.ctrlKey && e.key === 'z') {
                 window.undo();
+            }
+            if (e.key.toLowerCase() === 'r') {
+                const wInput = document.getElementById('obj-w');
+                const hInput = document.getElementById('obj-h');
+                const temp = wInput.value;
+                wInput.value = hInput.value;
+                hInput.value = temp;
+                draw();
             }
         });
 
