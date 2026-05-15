@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1778846971';
+import { ItemDatabase, EconomyRules } from './db.js?v=1778075789';
 
 export class InventorySystem {
     constructor(playerRef) {
@@ -260,52 +260,6 @@ export class InventorySystem {
         }
         
         return false;
-    }
-
-    // Raid-safe version: same as autoEquip but NEVER unequips back to stash
-    autoEquipRaidSafe(itemId) {
-        const item = this.items.find(i => i.id === itemId);
-        if (!item) return false;
-        
-        const dbItem = ItemDatabase[item.typeId];
-        let targetContainers = [];
-        
-        if (dbItem.type === 'weapon') {
-            if (dbItem.gridW * dbItem.gridH <= 2) targetContainers = ['secondaryWep', 'primaryWep', 'primaryWep2'];
-            else targetContainers = ['primaryWep', 'primaryWep2'];
-        } else if (dbItem.type === 'armor') targetContainers = ['armorSlot'];
-        else if (dbItem.type === 'helmet') targetContainers = ['helmetSlot'];
-        else if (dbItem.type === 'backpack') targetContainers = ['backpackSlot'];
-        else if (dbItem.type === 'melee') targetContainers = ['meleeSlot'];
-        else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff' || dbItem.type === 'throwable' || dbItem.type === 'ammo') {
-            targetContainers = ['hotbarSlot', 'secureContainer'];
-        }
-
-        for (let cName of targetContainers) {
-            if (cName === item.container) continue;
-            const container = this[cName];
-            if (!container) continue;
-            
-            const slot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, container);
-            if (slot) {
-                return this.moveItem(itemId, cName, slot.x, slot.y, slot.rotated).success;
-            } else if (['primaryWep', 'primaryWep2', 'armorSlot', 'helmetSlot', 'backpackSlot', 'secondaryWep', 'meleeSlot'].includes(cName)) {
-                const existingItem = this.items.find(i => i.container === cName);
-                if (existingItem && this.swapItems(itemId, existingItem.id)) {
-                    return true;
-                }
-            }
-        }
-
-        // Overflow to backpack when item does not fit gear slots (no stash unequip fallback)
-        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'secure'].includes(dbItem.type)) {
-            const bpSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.backpack);
-            if (bpSlot) {
-                return this.moveItem(itemId, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated).success;
-            }
-        }
-
-        return false; // No unequip fallback in raid
     }
 
     swapItems(itemId1, itemId2) {

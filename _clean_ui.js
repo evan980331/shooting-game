@@ -1,4 +1,4 @@
-import { ItemDatabase, EconomyRules } from './db.js?v=1778846971';
+import { ItemDatabase, EconomyRules } from './db.js?v=1778075789';
 
 export class UIManager {
     constructor(game) {
@@ -1039,53 +1039,7 @@ export class UIManager {
                 if (this.attachedItemId !== null) return;
 
                 const dbItem = ItemDatabase[item.typeId];
-                const isInRaid = !this.game.isInMenu;
 
-                // === 戰局中：禁止雙擊卸裝，僅允許裝備至欄位或背包 ===
-                if (isInRaid) {
-                    const EQUIP_SLOTS = ['primaryWep', 'primaryWep2', 'secondaryWep', 'meleeSlot', 'armorSlot', 'helmetSlot', 'backpackSlot', 'hotbarSlot'];
-                    // 如果物品已在裝備欄中，戰局內不允許雙擊卸裝
-                    if (EQUIP_SLOTS.includes(item.container)) {
-                        this._showQuickEquipError('戰局中不可雙擊卸裝，請拖曳至背包');
-                        return;
-                    }
-                    // 物品不在裝備欄：嘗試裝備
-                    if (dbItem && dbItem.type === 'weapon' && dbItem.gridW * dbItem.gridH > 2) {
-                        let placed = false;
-                        for (const cName of ['primaryWep', 'primaryWep2']) {
-                            if (item.container === cName) continue;
-                            const slot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv[cName]);
-                            if (slot) {
-                                const res = this.inv.moveItem(item.id, cName, slot.x, slot.y, slot.rotated);
-                                if (res && res.success) { placed = true; break; }
-                            }
-                        }
-                        if (!placed) {
-                            const bpSlot = this.inv.findFreeSlot(dbItem.gridW, dbItem.gridH, this.inv.backpack);
-                            if (bpSlot) {
-                                const res = this.inv.moveItem(item.id, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated);
-                                if (res && res.success) placed = true;
-                            }
-                        }
-                        if (!placed) {
-                            this._showQuickEquipError('主武器欄位與背包均已滽，無法快速放入');
-                            return;
-                        }
-                        this.refreshInventory();
-                        this.game.updateHUD();
-                        return;
-                    }
-                    // 使用 autoEquip，但若最終只剩「卸回 stash」的路徑則阻擋
-                    if (this.inv.autoEquipRaidSafe(item.id)) {
-                        this.refreshInventory();
-                        this.game.updateHUD();
-                    } else {
-                        this._showQuickEquipError('空間不足或無對應欄位，無法快速移動');
-                    }
-                    return;
-                }
-
-                // === 主選單：原有完整邏輯（允許卸裝） ===
                 // For weapons: try primaryWep → primaryWep2 → backpack → error
                 if (dbItem && dbItem.type === 'weapon' && dbItem.gridW * dbItem.gridH > 2) {
                     // Large weapon: primaryWep1 → primaryWep2 → backpack
@@ -1107,7 +1061,7 @@ export class UIManager {
                         }
                     }
                     if (!placed) {
-                        this._showQuickEquipError('主武器欄位與背包均已滽，無法快速放入');
+                        this._showQuickEquipError('主武器欄位與背包均已滿，無法快速放入');
                         return;
                     }
                     this.refreshInventory();
