@@ -1,5 +1,5 @@
-import { InventorySystem } from './inventory.js?v=1778075789';
-import { ItemDatabase } from './db.js?v=1778075789';
+import { InventorySystem } from './inventory.js?v=1778874108';
+import { ItemDatabase } from './db.js?v=1778874108';
 
 export class MathUtils {
     static seed = 1234567;
@@ -921,7 +921,7 @@ export class GameSimulation {
             size: 30, rotation: Math.PI,
             health: 100, maxHealth: 100,
             armorLevel: 4, helmetLevel: 4,
-            armorType: "金甲", armorDurability: 50, armorMaxDurability: 50,
+            armorType: "?�甲", armorDurability: 50, armorMaxDurability: 50,
             weapon: ItemDatabase["M7"],
             shootTimer: 0, color: [1, 0.2, 0.2, 1]
         }];

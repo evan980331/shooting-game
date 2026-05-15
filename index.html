@@ -5,44 +5,44 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dual-Mode 2D Top-down Shooter</title>
-    <link rel="stylesheet" href="style.css?v=1778075789.3">
+    <link rel="stylesheet" href="style.css?v=1778874108.3">
 </head>
 
 <body>
     <!-- Main Menu / Landing Page -->
     <div id="main-menu">
         <div id="main-lobby">
-            <h1 id="lobby-title">🎮 Dual-Mode 2D Top-down Shooter</h1>
+            <h1 id="lobby-title">?�� Dual-Mode 2D Top-down Shooter</h1>
 
             <!-- 4-tab navigation -->
             <div class="menu-tabs" id="lobby-tabs">
-                <button id="tab-stash" class="menu-tab-btn" data-panel="panel-stash">🗃️ 倉庫裝備區</button>
-                <button id="tab-shop" class="menu-tab-btn" data-panel="panel-shop">🛒 購買區</button>
-                <button id="tab-exchange" class="menu-tab-btn" data-panel="panel-exchange">🔄 兌換區</button>
-                <button id="tab-play" class="menu-tab-btn active" data-panel="panel-play">▶ 遊戲開始</button>
+                <button id="tab-stash" class="menu-tab-btn" data-panel="panel-stash">??�??�庫裝�??�</button>
+                <button id="tab-shop" class="menu-tab-btn" data-panel="panel-shop">?? 購買?�</button>
+                <button id="tab-exchange" class="menu-tab-btn" data-panel="panel-exchange">?? ?��??�</button>
+                <button id="tab-play" class="menu-tab-btn active" data-panel="panel-play">???�戲?��?</button>
             </div>
 
-            <!-- Panel: 遊戲開始 (default visible) -->
+            <!-- Panel: ?�戲?��? (default visible) -->
             <div id="panel-play" class="lobby-panel">
                 <div class="play-panel-inner">
                     <div class="play-panel-desc">
-                        <h2>準備出發</h2>
-                        <p>選擇地圖，帶著你的裝備進入任務區。搜刮物資，消滅目標，安全撤離。</p>
-                        <p style="color:#facc15;font-size:13px;">💡 提示：進入前先到 <strong>倉庫裝備區</strong> 配備武裝，<strong>購買區</strong> 補充彈藥。</p>
+                        <h2>準�??�發</h2>
+                        <p>?��??��?，帶?��??��??�進入任�??�?��??�物資�?消�??��?，�??�撤?��?/p>
+                        <p style="color:#facc15;font-size:13px;">?�� ?�示：進入?��???<strong>?�庫裝�??�</strong> ?��?武�?�?strong>購買?�</strong> 補�?彈藥??/p>
                     </div>
                     <div class="play-panel-controls">
-                        <label style="font-size:13px;color:#aaa;">選擇地圖</label>
+                        <label style="font-size:13px;color:#aaa;">?��??��?</label>
                         <select id="map-select" class="lobby-select">
-                            <option value="1">🗺️ 地圖 1 — 工廠廢墟 (預設)</option>
-                            <option value="2">🗺️ 地圖 2 (開發中)</option>
-                            <option value="3">🗺️ 地圖 3 (開發中)</option>
+                            <option value="1">?���??��? 1 ??工�?廢�? (?�設)</option>
+                            <option value="2">?���??��? 2 (?�發�?</option>
+                            <option value="3">?���??��? 3 (?�發�?</option>
                         </select>
-                        <button id="btn-enter-raid" class="play-btn lobby-play-btn">▶ 進入任務 (Enter Raid)</button>
+                        <button id="btn-enter-raid" class="play-btn lobby-play-btn">???�入任�? (Enter Raid)</button>
                     </div>
                 </div>
             </div>
 
-            <!-- Panel: 倉庫裝備區 -->
+            <!-- Panel: ?�庫裝�??� -->
             <div id="panel-stash" class="lobby-panel hidden">
                 <div id="menu-content-area">
                     <!-- inventory-panel will be inserted here by ui.js -->
@@ -54,23 +54,23 @@
                             <div class="inventory-section equip-panel"
                                 style="background: #1e1e1e; border: 1px solid #333; padding: 10px; width: max-content;">
                                 <h3 style="margin: 0 0 10px 0; font-size: 14px; border-bottom: 1px solid #444; padding-bottom: 5px; color: #acc;">
-                                    裝備價值: $ ...</h3>
+                                    裝�??��? $ ...</h3>
 
                                 <!-- Weapons Area -->
                                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                                     <div style="display: flex; flex-direction: column; gap: 10px;">
                                         <div class="equip-slot-container">
-                                            <div class="slot-bg-text">主武器 1</div>
+                                            <div class="slot-bg-text">主武??1</div>
                                             <div id="primary-grid" class="grid-container" style="width: 250px; height: 100px;"></div>
                                         </div>
                                         <div class="equip-slot-container">
-                                            <div class="slot-bg-text">主武器 2</div>
+                                            <div class="slot-bg-text">主武??2</div>
                                             <div id="primary-grid-2" class="grid-container" style="width: 250px; height: 100px;"></div>
                                         </div>
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 10px;">
                                         <div class="equip-slot-container">
-                                            <div class="slot-bg-text">手槍</div>
+                                            <div class="slot-bg-text">?��?</div>
                                             <div id="secondary-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
                                         </div>
                                         <div class="equip-slot-container">
@@ -83,7 +83,7 @@
                                 <!-- Body Area -->
                                 <div style="display: flex; gap: 10px; margin-bottom: 10px;">
                                     <div class="equip-slot-container">
-                                        <div class="slot-bg-text">頭盔</div>
+                                        <div class="slot-bg-text">?��?</div>
                                         <div id="helmet-grid" class="grid-container" style="width: 100px; height: 100px;"></div>
                                     </div>
                                     <div class="equip-slot-container">
@@ -91,7 +91,7 @@
                                         <div id="armor-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
                                     </div>
                                     <div class="equip-slot-container">
-                                        <div class="slot-bg-text">背包裝備</div>
+                                        <div class="slot-bg-text">?��?裝�?</div>
                                         <div id="backpack-equip-grid" class="grid-container" style="width: 100px; height: 150px;"></div>
                                     </div>
                                 </div>
@@ -99,17 +99,17 @@
                                 <!-- Containers Area -->
                                 <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
                                     <div class="equip-slot-container">
-                                        <div class="slot-bg-text">口袋 / 快捷</div>
+                                        <div class="slot-bg-text">??? / 快捷</div>
                                         <div id="hotbar-grid" class="grid-container" style="width: 250px; height: 50px;"></div>
                                     </div>
                                     <div style="display: flex; flex-direction: column; gap: 5px; margin-left: 20px;">
                                         <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-                                            <span style="font-size: 14px; font-weight: bold; color: #acc;">保險箱</span>
+                                            <span style="font-size: 14px; font-weight: bold; color: #acc;">保險�?/span>
                                             <select id="secure-container-select"
                                                 style="background:#333; color:white; border:1px solid #555; padding:2px; font-size: 12px; outline: none;">
-                                                <option value="初始保險">初始 (2x2)</option>
-                                                <option value="中級保險">中級 (2x3) - $10,000解鎖</option>
-                                                <option value="高級保險">高級 (3x3) - 未解鎖</option>
+                                                <option value="?��?保險">?��? (2x2)</option>
+                                                <option value="中�?保險">中�? (2x3) - $10,000�??</option>
+                                                <option value="高�?保險">高�? (3x3) - ?�解??/option>
                                             </select>
                                         </div>
                                         <div class="equip-slot-container" style="align-self: flex-start;">
@@ -120,7 +120,7 @@
                             </div>
 
                             <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 10px;">
-                                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">背包內容</h3>
+                                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">?��??�容</h3>
                                 <div id="backpack-grid" class="grid-container"></div>
                             </div>
                         </div>
@@ -128,16 +128,16 @@
                         <!-- Right: Stash -->
                         <div class="inventory-section" id="inventory-right-section" style="flex: 0 0 auto; background: #1e1e1e; border: 1px solid #333; padding: 10px;">
                             <div id="stash-header" style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
-                                <span style="font-weight: bold;">倉庫 (Stash)</span>
+                                <span style="font-weight: bold;">?�庫 (Stash)</span>
                                 <div style="display: flex; gap: 10px;">
-                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">整理</button>
-                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">轉移全部</button>
+                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">?��?</button>
+                                    <button style="background: #333; color: white; border: 1px solid #555; padding: 5px 10px; cursor: pointer;">轉移?�部</button>
                                 </div>
                             </div>
                             <div id="stash-grid" class="grid-container"></div>
                             
                             <div id="loot-header" class="hidden" style="display: flex; justify-content: space-between; align-items: center; background: #222; padding: 5px 10px; margin-bottom: 10px;">
-                                <span style="font-weight: bold;">地上物資 (Loot)</span>
+                                <span style="font-weight: bold;">?��??��? (Loot)</span>
                             </div>
                             <div id="loot-grid" class="grid-container hidden"></div>
                         </div>
@@ -145,27 +145,27 @@
                 </div>
             </div>
 
-            <!-- Panel: 購買區 -->
+            <!-- Panel: 購買?� -->
             <div id="panel-shop" class="lobby-panel hidden">
                 <div style="padding: 10px;">
-                    <h2 style="margin:0 0 10px 0; color:#acc;">🛒 購買區 (Buy: 100% | Sell: 30%)</h2>
-                    <div id="shop-money" style="margin-bottom:10px;">💰 餘額: $<span id="money-text">0</span></div>
+                    <h2 style="margin:0 0 10px 0; color:#acc;">?? 購買?� (Buy: 100% | Sell: 30%)</h2>
+                    <div id="shop-money" style="margin-bottom:10px;">?�� 餘�?: $<span id="money-text">0</span></div>
                     <div id="shop-categories" style="display: flex; gap: 10px; margin: 10px 0; border-bottom: 1px solid #555; padding-bottom: 10px;"></div>
                     <div id="shop-items"></div>
                 </div>
             </div>
 
-            <!-- Panel: 兌換區 -->
+            <!-- Panel: ?��??� -->
             <div id="panel-exchange" class="lobby-panel hidden">
                 <div class="exchange-placeholder">
-                    <div class="exchange-icon">🔄</div>
-                    <h2>物資兌換區</h2>
-                    <p>以在任務中蒐集的物資換取裝備、彈藥或特殊道具。</p>
-                    <p style="color:#888;font-size:13px;">（兌換系統建置中，待地圖物資點確認後開放）</p>
+                    <div class="exchange-icon">??</div>
+                    <h2>?��??��??�</h2>
+                    <p>以在任�?中�??��??��??��?裝�??��??��??��??�具??/p>
+                    <p style="color:#888;font-size:13px;">（�??�系統建置中，�??��??��?點確認�??�放�?/p>
                     <div class="exchange-preview-list">
-                        <div class="exchange-item-preview">🎒 <strong>戰術背包</strong> → 3× 物資箱 + 1× 電子零件</div>
-                        <div class="exchange-item-preview">🪖 <strong>藍甲</strong> → 5× 鋼板 + 2× 維修套件</div>
-                        <div class="exchange-item-preview">🔫 <strong>步槍彈匣升級</strong> → 4× 零件 + $2000</div>
+                        <div class="exchange-item-preview">?? <strong>?��??��?</strong> ??3? ?��?�?+ 1? ?��??�件</div>
+                        <div class="exchange-item-preview">?? <strong>?�甲</strong> ??5? ?�板 + 2? 維修套件</div>
+                        <div class="exchange-item-preview">?�� <strong>步�?彈匣?��?</strong> ??4? ?�件 + $2000</div>
                     </div>
                 </div>
             </div>
@@ -179,13 +179,13 @@
             <div id="hud-top-left"
                 style="position: absolute; top: 10px; left: 10px; display: flex; flex-direction: column; gap: 10px; opacity: 0.8;">
                 <div style="background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 4px;">
-                    模式: <span id="mode-text">搜打撤</span> | <span id="extraction-timer" class="hidden">撤離倒數: <span
+                    模�?: <span id="mode-text">?��???/span> | <span id="extraction-timer" class="hidden">?�離?�數: <span
                             id="timer-text">10.0</span>s</span>
                 </div>
                 <!-- 15 Minute Timer added -->
                 <div
                     style="background: rgba(0,0,0,0.6); padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 18px; color: #acc;">
-                    時間: <span id="game-timer">15:00</span>
+                    ?��?: <span id="game-timer">15:00</span>
                 </div>
                 <div
                     style="border: 2px solid #555; border-radius: 50%; overflow: hidden; width: 150px; height: 150px; background: #222;">
@@ -199,7 +199,7 @@
                 <div style="display: flex; gap: 8px; align-items: flex-end; margin-bottom: 5px;">
                     <!-- Helmet Durability Bar -->
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                        <span style="font-size: 10px; color: #aaa;">頭</span>
+                        <span style="font-size: 10px; color: #aaa;">??/span>
                         <span id="helmet-dur-text" style="font-size: 9px; color: #00ccff;">-</span>
                         <div style="width: 20px; height: 60px; background: #333; border: 1px solid #555; position: relative; overflow: hidden; border-radius: 2px;">
                             <div id="helmet-fill"
@@ -216,7 +216,7 @@
                     </div>
                     <!-- Armor Durability Bar -->
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
-                        <span style="font-size: 10px; color: #aaa;">甲</span>
+                        <span style="font-size: 10px; color: #aaa;">??/span>
                         <span id="armor-dur-text" style="font-size: 9px; color: #00ffaa;">-</span>
                         <div style="width: 20px; height: 60px; background: #333; border: 1px solid #555; position: relative; overflow: hidden; border-radius: 2px;">
                             <div id="armor-fill"
@@ -238,23 +238,23 @@
                         <span>HP: <strong id="health-text">100</strong>%</span>
                         <span id="health-conditions" style="font-size: 10px;">
                             <span id="bleeding-indicator" class="hidden"
-                                style="color: red; font-weight: bold;">(出血)</span>
+                                style="color: red; font-weight: bold;">(?��?)</span>
                             <span id="heavy-bleeding-indicator" class="hidden"
-                                style="color: darkred; font-weight: bold;">(重度)</span>
+                                style="color: darkred; font-weight: bold;">(?�度)</span>
                             <span id="head-injury-indicator" class="hidden"
-                                style="color: orange; font-weight: bold;">(頭傷)</span>
+                                style="color: orange; font-weight: bold;">(?�傷)</span>
                             <span id="torso-injury-indicator" class="hidden"
-                                style="color: yellow; font-weight: bold;">(軀傷)</span>
+                                style="color: yellow; font-weight: bold;">(軀??</span>
                             <span id="painkiller-indicator" class="hidden"
-                                style="color: lightblue; font-weight: bold;">(止痛)</span>
+                                style="color: lightblue; font-weight: bold;">(止�?)</span>
                             <span id="healing-indicator" class="hidden"
-                                style="color: lime; font-weight: bold;">(治療)</span>
+                                style="color: lime; font-weight: bold;">(治�?)</span>
                             <span id="adrenaline-indicator" class="hidden"
-                                style="color: #ff6600; font-weight: bold;">⚡腎上腺</span>
+                                style="color: #ff6600; font-weight: bold;">?��?上腺</span>
                             <span id="strength-indicator" class="hidden"
-                                style="color: #cc44ff; font-weight: bold;">💪力量</span>
+                                style="color: #cc44ff; font-weight: bold;">?��?��?</span>
                             <span id="weightless-indicator" class="hidden"
-                                style="color: #44ffcc; font-weight: bold;">🪶無重</span>
+                                style="color: #44ffcc; font-weight: bold;">?��?��?</span>
                         </span>
                     </div>
                     <div
@@ -266,7 +266,7 @@
                 </div>
 
                 <div style="font-size: 12px; background: rgba(0,0,0,0.6); padding: 3px; display: inline-block;">
-                    負重: <span id="weight-text">0</span> kg | 速度: <span id="speed-multiplier-text">1.05</span>x
+                    負�?: <span id="weight-text">0</span> kg | ?�度: <span id="speed-multiplier-text">1.05</span>x
                 </div>
             </div>
 
@@ -301,12 +301,12 @@
                     <span id="ammo-text">- / -</span>
                 </div>
                 <div id="reloading-indicator" class="hidden"
-                    style="color: cyan; font-weight: bold; font-size: 14px; margin-top: 5px;">(換彈中...)</div>
+                    style="color: cyan; font-weight: bold; font-size: 14px; margin-top: 5px;">(?��?�?..)</div>
             </div>
 
             <!-- Full Map Overlay -->
             <div id="fullmap-overlay" class="hidden" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 1500; display: flex; justify-content: center; align-items: center; flex-direction: column;">
-                <h3 style="color: white; margin-bottom: 10px; z-index: 1501;">總地圖 (點擊或按 M 關閉)</h3>
+                <h3 style="color: white; margin-bottom: 10px; z-index: 1501;">總地??(點�??��? M ?��?)</h3>
                 <div style="border: 3px solid #777; width: 80vmin; height: 80vmin; max-width: 800px; max-height: 800px; background: #222; z-index: 1501; box-sizing: border-box;">
                     <canvas id="fullmap-canvas" width="800" height="800" style="width: 100%; height: 100%; display: block;"></canvas>
                 </div>
@@ -314,7 +314,7 @@
 
             <!-- Action Progress Bar (Center Screen) -->
             <div id="action-progress" class="hidden" style="position: absolute; top: 60%; left: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 5px; background: rgba(0,0,0,0.8); padding: 10px 20px; border-radius: 8px; border: 2px solid #555; z-index: 500;">
-                <div id="action-text" style="color: white; font-size: 16px; font-weight: bold;">處理中... 0.0s</div>
+                <div id="action-text" style="color: white; font-size: 16px; font-weight: bold;">?��?�?.. 0.0s</div>
                 <div style="width: 200px; height: 15px; background: #222; border-radius: 5px; overflow: hidden; position: relative;">
                     <div id="action-bar-fill" style="width: 0%; height: 100%; background: #00ffaa; transition: width 0.1s linear;"></div>
                 </div>
@@ -323,25 +323,24 @@
             <!-- Center Screen Text -->
             <div id="game-over" class="hidden"
                 style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: red; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center; pointer-events: auto;">
-                已死亡，系統重置中...
+                已死亡�?系統?�置�?..
                 <br>
                 <button id="btn-back-menu-fail" class="play-btn"
-                    style="margin-top: 20px; font-size: 20px;">返回主選單</button>
+                    style="margin-top: 20px; font-size: 20px;">返�?主選??/button>
             </div>
             <div id="game-win" class="hidden"
                 style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: lime; font-size: 32px; background: rgba(0,0,0,0.7); padding: 20px; text-align: center; pointer-events: auto;">
-                成功撤離！
-                <br>
+                ?��??�離�?                <br>
                 <button id="btn-back-menu-win" class="play-btn"
-                    style="margin-top: 20px; font-size: 20px;">返回主選單</button>
+                    style="margin-top: 20px; font-size: 20px;">返�?主選??/button>
             </div>
         </div>
 
         <!-- Inventory & Shop Overlay -->
         <div id="ui-overlay" class="hidden">
             <div id="overlay-shop-panel">
-                <h2>商店 (Buy: 100%, Sell: 30%)</h2>
-                <div id="overlay-shop-money">錢: $<span id="overlay-money-text">0</span></div>
+                <h2>?��? (Buy: 100%, Sell: 30%)</h2>
+                <div id="overlay-shop-money">?? $<span id="overlay-money-text">0</span></div>
                 <div id="overlay-shop-categories"
                     style="display: flex; gap: 10px; margin: 15px 0; border-bottom: 1px solid #555; padding-bottom: 10px;">
                 </div>
@@ -353,10 +352,10 @@
                 <!-- Left: Equipment & Backpack -->
                 <div style="display: flex; flex-direction: column; gap: 20px; flex: 0 0 auto;">
                     <div class="inventory-section">
-                        <h3>裝備 (Equipment)</h3>
+                        <h3>裝�? (Equipment)</h3>
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
                             <div>
-                                <h4>頭盔 (2x2)</h4>
+                                <h4>?��? (2x2)</h4>
                                 <div id="ui-helmet-grid" class="grid-container" style="width: 100px; height: 100px;">
                                 </div>
                             </div>
@@ -365,15 +364,15 @@
                     </div>
 
                     <div class="inventory-section">
-                        <h3>背包內容 (Backpack)</h3>
+                        <h3>?��??�容 (Backpack)</h3>
                         <div id="overlay-backpack-grid" class="grid-container"></div>
                     </div>
-                    <button id="close-ui-btn" style="padding: 10px; cursor: pointer;">關閉 / 返回遊戲 (TAB)</button>
+                    <button id="close-ui-btn" style="padding: 10px; cursor: pointer;">?��? / 返�??�戲 (TAB)</button>
                 </div>
 
                 <!-- Right: Stash -->
                 <div class="inventory-section" style="flex: 0 0 auto;">
-                    <h3>倉庫 (Stash)</h3>
+                    <h3>?�庫 (Stash)</h3>
                     <div id="overlay-stash-grid" class="grid-container"></div>
                 </div>
             </div> <!-- End overlay-inventory-panel -->
@@ -404,7 +403,7 @@
             <h4 id="stats-title" style="margin:0; color:#ffd700;">Weapon Name</h4>
             <button id="stats-close-btn"
                 style="background:none; border:none; color:#aaa; font-size:18px; cursor:pointer; padding:0 4px; line-height:1;"
-                title="關閉">✕</button>
+                title="?��?">??/button>
         </div>
         <div id="stats-content" style="font-size: 13px; line-height: 1.5; color: #ccc;">
             <!-- Injected dynamically -->
@@ -427,16 +426,16 @@
         left: 50%;
         transform: translate(-50%, -50%);
     ">
-        <h3 style="margin:0 0 15px 0; color:#00ffaa; border-bottom:1px solid #333; padding-bottom:10px;">裝備修復</h3>
+        <h3 style="margin:0 0 15px 0; color:#00ffaa; border-bottom:1px solid #333; padding-bottom:10px;">裝�?修復</h3>
         <div id="repair-info" style="font-size: 14px; line-height: 1.8; margin-bottom: 20px;">
             <!-- Injected dynamically -->
         </div>
         <div style="display:flex; gap:10px; justify-content:flex-end;">
-            <button id="repair-cancel-btn" style="padding:8px 15px; background:#444; color:white; border:none; border-radius:4px; cursor:pointer;">取消</button>
-            <button id="repair-confirm-btn" style="padding:8px 15px; background:#00ffaa; color:#000; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">確認修復</button>
+            <button id="repair-cancel-btn" style="padding:8px 15px; background:#444; color:white; border:none; border-radius:4px; cursor:pointer;">?��?</button>
+            <button id="repair-confirm-btn" style="padding:8px 15px; background:#00ffaa; color:#000; border:none; border-radius:4px; cursor:pointer; font-weight:bold;">確�?修復</button>
         </div>
     </div>
 
-    <script type="module" src="main.js?v=1778075789"></script>
+    <script type="module" src="main.js?v=1778874108"></script>
 </body>
 </html>
