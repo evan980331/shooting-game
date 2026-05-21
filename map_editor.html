@@ -424,14 +424,22 @@
             } else if (mode === 'spawn') {
                 spawns.push({x: mx, y: my, name: name});
             } else if (mode === 'delete') {
-                const dist = (ax, ay, bx, by) => Math.hypot(ax-bx, ay-by);
-                walls = walls.filter(o => dist(mx, my, o.x, o.y) > 50);
-                grass = grass.filter(o => dist(mx, my, o.x, o.y) > 50);
-                safes = safes.filter(o => dist(mx, my, o.x, o.y) > 50);
-                loots = loots.filter(o => dist(mx, my, o.x, o.y) > 50);
-                buildings = buildings.filter(o => dist(mx, my, o.x, o.y) > 100);
-                exits = exits.filter(o => dist(mx, my, o.x, o.y) > 100);
-                spawns = spawns.filter(o => dist(mx, my, o.x, o.y) > 50);
+                const hitPointInRect = (x, y, obj) => {
+                    return x >= obj.x - obj.w/2 && x <= obj.x + obj.w/2 &&
+                        y >= obj.y - obj.h/2 && y <= obj.y + obj.h/2;
+                };
+                const hitPointInCircle = (x, y, obj, radius = null) => {
+                    const r = radius !== null ? radius : ((obj.w && obj.h) ? (obj.w + obj.h) / 4 : 30);
+                    return Math.hypot(x - obj.x, y - obj.y) <= r;
+                };
+
+                walls = walls.filter(o => !hitPointInRect(mx, my, o));
+                grass = grass.filter(o => !hitPointInCircle(mx, my, o));
+                safes = safes.filter(o => !hitPointInCircle(mx, my, o, 30));
+                spawns = spawns.filter(o => !hitPointInCircle(mx, my, o, 30));
+                loots = loots.filter(o => !hitPointInRect(mx, my, o));
+                buildings = buildings.filter(o => !hitPointInRect(mx, my, o));
+                exits = exits.filter(o => !hitPointInRect(mx, my, o));
             }
             lastPlaced = { x: currentWorldX, y: currentWorldY };
             draw();

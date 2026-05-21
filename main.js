@@ -167,6 +167,14 @@ class Game {
         }));
     }
 
+    isPositionInGrass(x, y) {
+        if (!this.sim.state.grass) return false;
+        for (let bush of this.sim.state.grass) {
+            const dist = Math.hypot(x - bush.x, y - bush.y);
+            if (dist < (bush.w + bush.h) / 4) return true;
+        }
+        return false;
+    }
 
     async init() {
         if (!navigator.gpu) {
@@ -1239,11 +1247,15 @@ class Game {
 
         // Player
         if (!this.player.isDead) {
+            const playerColor = [...this.player.color];
+            if (this.isPositionInGrass(this.player.x, this.player.y)) {
+                playerColor[3] = 1.0; // self remains clearly visible in bush
+            }
             this.renderInstances.push({
                 x: this.player.x + this.player.recoilOffset.x, 
                 y: this.player.y + this.player.recoilOffset.y, 
                 w: this.player.size, h: this.player.size,
-                rot: this.player.rotation, color: this.player.color, shapeType: 1.0, originX: 0, originY: 0
+                rot: this.player.rotation, color: playerColor, shapeType: 1.0, originX: 0, originY: 0
             });
 
             // Helmet (smaller concentric circle)
@@ -1260,7 +1272,6 @@ class Game {
             const weaponOriginOffX = this.player.size / 2 + weaponW / 2 - 2;
 
             this.renderInstances.push({
-                // Pos mapped exactly to player center
                 x: this.player.x + this.player.recoilOffset.x, 
                 y: this.player.y + this.player.recoilOffset.y, 
                 w: weaponW, h: weaponH,
@@ -1273,21 +1284,25 @@ class Game {
         if (this.bots) {
             for (let b of this.bots) {
                 if (b.health > 0) {
+                    const botColor = [b.color[0], b.color[1], b.color[2], 1.0];
+                    if (this.isPositionInGrass(b.x, b.y)) {
+                        botColor[3] = 0.15; // Bot/other players become mostly hidden in bushes
+                    }
                     this.renderInstances.push({
                         x: b.x, y: b.y, w: b.size, h: b.size,
-                        rot: b.rotation, color: b.color, shapeType: 1.0, originX: 0, originY: 0
+                        rot: b.rotation, color: botColor, shapeType: 1.0, originX: 0, originY: 0
                     });
 
                     this.renderInstances.push({
                         x: b.x, y: b.y, w: b.size * 0.55, h: b.size * 0.55,
-                        rot: b.rotation, color: [0.8, 0.2, 0.2, 1.0], shapeType: 1.0, originX: 0, originY: 0
+                        rot: b.rotation, color: [0.8, 0.2, 0.2, botColor[3]], shapeType: 1.0, originX: 0, originY: 0
                     });
 
                     const weaponW = 20;
                     const weaponOriginOffX = b.size / 2 + weaponW / 2 - 2;
                     this.renderInstances.push({
                         x: b.x, y: b.y, w: 20, h: 6,
-                        rot: b.rotation, color: [0.5, 0.5, 0.5, 1], shapeType: 0.0,
+                        rot: b.rotation, color: [0.5, 0.5, 0.5, botColor[3]], shapeType: 0.0,
                         originX: weaponOriginOffX, originY: 0
                     });
 
@@ -1295,7 +1310,7 @@ class Game {
                     const botHpPct = b.health / 100;
                     this.renderInstances.push({
                         x: b.x, y: b.y - b.size - 5, w: b.size * 1.2 * botHpPct, h: 4,
-                        rot: 0, color: [0, 1, 0, 0.8], shapeType: 0.0, originX: 0, originY: 0
+                        rot: 0, color: [0, 1, 0, 0.8 * botColor[3]], shapeType: 0.0, originX: 0, originY: 0
                     });
 
                     // Armor Durability Bar (if any)
@@ -1304,7 +1319,7 @@ class Game {
                         const botArmorPct = b.armorDurability / armorMax;
                         this.renderInstances.push({
                             x: b.x, y: b.y - b.size - 10, w: b.size * 1.2 * botArmorPct, h: 3,
-                            rot: 0, color: [0, 0.6, 1, 0.8], shapeType: 0.0, originX: 0, originY: 0
+                            rot: 0, color: [0, 0.6, 1, 0.8 * botColor[3]], shapeType: 0.0, originX: 0, originY: 0
                         });
                     }
                 }
