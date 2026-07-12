@@ -564,23 +564,46 @@ class Game {
         const itemIndex = this.inventory.items.findIndex(i => i.id == itemId);
         if (itemIndex === -1) return;
         const item = this.inventory.items[itemIndex];
-        
-        this.inventory.freeGrid(item, this.inventory[item.container]);
-        this.inventory.items.splice(itemIndex, 1);
+
+        // If dropping a backpack or rig, first drop all items inside it to the ground
+        const itemDbDef = ItemDatabase[item.typeId];
+        if (itemDbDef) {
+            let innerContainer = null;
+            if (itemDbDef.type === 'backpack' && item.container === 'backpackSlot') {
+                innerContainer = 'backpack';
+            } else if (itemDbDef.type === 'rig' && item.container === 'rigSlot') {
+                innerContainer = 'rig';
+            }
+            if (innerContainer) {
+                // Collect inner items first to avoid mutation during iteration
+                const innerItems = this.inventory.items.filter(i => i.container === innerContainer).map(i => i.id);
+                for (const innerId of innerItems) {
+                    this.dropItemToGround(innerId);
+                }
+            }
+        }
+
+        // Re-find index since inner drops may have shifted the array
+        const freshIndex = this.inventory.items.findIndex(i => i.id == itemId);
+        if (freshIndex === -1) return;
+        const freshItem = this.inventory.items[freshIndex];
+
+        this.inventory.freeGrid(freshItem, this.inventory[freshItem.container]);
+        this.inventory.items.splice(freshIndex, 1);
         this.inventory.updatePlayerWeight();
 
         const offsetX = (Math.random() - 0.5) * 40;
         const offsetY = (Math.random() - 0.5) * 40;
         const gItem = {
             id: this.sim.nextGroundItemId ? this.sim.nextGroundItemId++ : (this.sim.nextGroundItemId = 1),
-            typeId: item.typeId,
+            typeId: freshItem.typeId,
             x: this.player.x + offsetX,
             y: this.player.y + offsetY,
-            amount: item.amount,
-            currentMag: item.currentMag,
-            durability: item.durability,
-            maxDurability: item.maxDurability,
-            capacity: item.capacity
+            amount: freshItem.amount,
+            currentMag: freshItem.currentMag,
+            durability: freshItem.durability,
+            maxDurability: freshItem.maxDurability,
+            capacity: freshItem.capacity
         };
         if (!this.sim.state.groundItems) this.sim.state.groundItems = [];
         this.sim.state.groundItems.push(gItem);

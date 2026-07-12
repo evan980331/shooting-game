@@ -28,6 +28,8 @@ export class UIManager {
         this.helmetGrid = document.getElementById('helmet-grid');
         this.hotbarGrid = document.getElementById('hotbar-grid');
         this.backpackEquipGrid = document.getElementById('backpack-equip-grid');
+        this.rigEquipGrid = document.getElementById('rig-equip-grid');
+        this.rigGrid = document.getElementById('rig-grid');
         this.secureGrid = document.getElementById('secure-grid');
         this.secureSelect = document.getElementById('secure-container-select');
 
@@ -386,6 +388,8 @@ export class UIManager {
         this.setupDropZone(this.helmetGrid, 'helmetSlot');
         this.setupDropZone(this.hotbarGrid, 'hotbarSlot');
         this.setupDropZone(this.backpackEquipGrid, 'backpackSlot');
+        if (this.rigEquipGrid) this.setupDropZone(this.rigEquipGrid, 'rigSlot');
+        if (this.rigGrid) this.setupDropZone(this.rigGrid, 'rig');
         this.setupDropZone(this.secureGrid, 'secureContainer');
         if (this.lootGrid) this.setupDropZone(this.lootGrid, 'loot');
 
@@ -485,6 +489,8 @@ export class UIManager {
                 // Map container DOM id to container name logic
                 let containerName = null;
                 if (gridContainer.id.includes('stash')) containerName = 'stash';
+                else if (gridContainer.id.includes('rig-equip')) containerName = 'rigSlot';
+                else if (gridContainer.id === 'rig-grid') containerName = 'rig';
                 else if (gridContainer.id.includes('backpack-equip')) containerName = 'backpackSlot';
                 else if (gridContainer.id.includes('backpack')) containerName = 'backpack'; // strict!
                 else if (gridContainer.id === 'primary-grid') containerName = 'primaryWep';
@@ -527,6 +533,8 @@ export class UIManager {
                         if (dbItem.type !== 'helmet') isValidTarget = false;
                     } else if (containerName === 'backpackSlot') {
                         if (dbItem.type !== 'backpack') isValidTarget = false;
+                    } else if (containerName === 'rigSlot') {
+                        if (dbItem.type !== 'rig') isValidTarget = false;
                     }
 
                     if (isValidTarget && this.inv.canPlaceItem(w, h, gridCoordX, gridCoordY, this.inv[containerName], this.attachedItemId)) {
@@ -872,7 +880,7 @@ export class UIManager {
         const allGrids = [
             this.stashGrid, this.backpackGrid, this.primaryGrid, this.primaryGrid2,
             this.secondaryGrid, this.meleeGrid, this.armorGrid, this.helmetGrid,
-            this.hotbarGrid, this.backpackEquipGrid, this.secureGrid,
+            this.hotbarGrid, this.backpackEquipGrid, this.rigEquipGrid, this.rigGrid, this.secureGrid,
             overlayBackpackGrid, overlayStashGrid, overlayHelmetGrid, this.lootGrid
         ];
 
@@ -887,8 +895,10 @@ export class UIManager {
             'helmetSlot': [this.helmetGrid, overlayHelmetGrid],
             'hotbarSlot': [this.hotbarGrid],
             'backpackSlot': [this.backpackEquipGrid],
+            'rigSlot': [this.rigEquipGrid],
             'secureContainer': [this.secureGrid],
             'backpack': [this.backpackGrid, overlayBackpackGrid],
+            'rig': [this.rigGrid],
             'stash': [this.stashGrid, overlayStashGrid],
             'loot': [this.lootGrid]
         };
@@ -915,6 +925,27 @@ export class UIManager {
         updateBackpackSize(this.backpackGrid, !!equippedBackpack);
         updateBackpackSize(overlayBackpackGrid, !!equippedBackpack);
 
+        // Dynamic Rig Storage Scaling
+        const equippedRig = this.inv.items.find(i => i.container === 'rigSlot');
+        const updateRigSize = (grid, isRig) => {
+            if (!grid) return;
+            const section = grid.closest('.inventory-section') || grid.parentElement;
+            if (isRig) {
+                const rigData = ItemDatabase[equippedRig.typeId];
+                this.inv.rig.w = rigData.capW;
+                this.inv.rig.h = rigData.capH;
+                if (section) section.style.display = 'block';
+                grid.style.width = (rigData.capW * this.cellSize) + 'px';
+                grid.style.height = (rigData.capH * this.cellSize) + 'px';
+            } else {
+                this.inv.rig.w = 0;
+                this.inv.rig.h = 0;
+                if (section) section.style.display = 'none';
+            }
+        };
+
+        updateRigSize(this.rigGrid, !!equippedRig);
+
         // Update Secure Container Grid Visually
         const secureData = ItemDatabase[this.inv.secureContainerType];
         if (secureData && this.secureGrid) {
@@ -932,6 +963,7 @@ export class UIManager {
         this.helmetGrid.style.width = '100px'; this.helmetGrid.style.height = '100px';
         this.hotbarGrid.style.width = '250px'; this.hotbarGrid.style.height = '50px';
         this.backpackEquipGrid.style.width = '150px'; this.backpackEquipGrid.style.height = '150px';
+        if (this.rigEquipGrid) { this.rigEquipGrid.style.width = '150px'; this.rigEquipGrid.style.height = '100px'; }
 
         this.inv.items.forEach(item => {
             const dbItem = ItemDatabase[item.typeId];

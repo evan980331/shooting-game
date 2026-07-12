@@ -56,6 +56,12 @@ export const ItemDatabase = {
     "大背包": { name: "大背包", type: "backpack", price: 9000, weight: 3.5, gridW: 3, gridH: 3, capW: 5, capH: 6 },
     "特大背包": { name: "特大背包", type: "backpack", price: 12000, weight: 5, gridW: 3, gridH: 3, capW: 5, capH: 8 },
 
+    // === Chest Rigs (胸掛) ===
+    // gridW/H: size in equipment slot. capW/H: inner grid capacity.
+    // Rigs specialize in consumables, ammo, and small utility items.
+    "基礎胸掛": { name: "基礎胸掛", type: "rig", price: 3000, weight: 1.5, gridW: 3, gridH: 2, capW: 5, capH: 2 },
+    "高級胸掛": { name: "高級胸掛", type: "rig", price: 8000, weight: 2.5, gridW: 3, gridH: 2, capW: 5, capH: 3 },
+
     // === Repair Kits ===
     "金甲修": { name: "金甲修", type: "repair", price: 4000, weight: 2.5, gridW: 2, gridH: 2, maxCapacity: 100, level: 4, useRate: 10, prepTime: 3000 },
     "紫甲修": { name: "紫甲修", type: "repair", price: 3000, weight: 2, gridW: 2, gridH: 2, maxCapacity: 75, level: 3, useRate: 10, prepTime: 2000 },
@@ -194,6 +200,7 @@ export const EconomyRules = {
         '槍械': (item) => item.type === 'weapon',
         '護甲': (item) => item.type === 'armor' || item.type === 'helmet',
         '背包': (item) => item.type === 'backpack',
+        '胸掛': (item) => item.type === 'rig',
         '醫療': (item) => item.type === 'medical' || item.type === 'medical-buff',
         '投擲物': (item) => item.type === 'throwable',
         '維修配件': (item) => item.type === 'repair',

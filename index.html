@@ -90,14 +90,10 @@
                                         <div class="slot-bg-text">護甲</div>
                                         <div id="armor-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
                                     </div>
-                                    <div class="equip-slot-container">
-                                        <div class="slot-bg-text">背包裝備</div>
-                                        <div id="backpack-equip-grid" class="grid-container" style="width: 100px; height: 150px;"></div>
-                                    </div>
                                 </div>
 
-                                <!-- Containers Area -->
-                                <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: flex-end;">
+                                <!-- Hotbar Row -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 6px; align-items: flex-start;">
                                     <div class="equip-slot-container">
                                         <div class="slot-bg-text">口袋 / 快捷</div>
                                         <div id="hotbar-grid" class="grid-container" style="width: 250px; height: 50px;"></div>
@@ -117,11 +113,30 @@
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 10px;">
-                                <h3 style="margin: 0 0 10px 0; font-size: 14px; color: #acc;">背包內容</h3>
-                                <div id="backpack-grid" class="grid-container"></div>
+                                <!-- Rig Row: equip slot icon + rig contents panel -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 6px; align-items: flex-start;">
+                                    <div class="equip-slot-container" style="flex: 0 0 auto;">
+                                        <div class="slot-bg-text">胸掛裝備</div>
+                                        <div id="rig-equip-grid" class="grid-container" style="width: 150px; height: 100px;"></div>
+                                    </div>
+                                    <div id="rig-panel" class="inventory-section" style="background: #1a2030; border: 1px solid #3a5a8a; padding: 8px; min-width: 120px;">
+                                        <h3 style="margin: 0 0 6px 0; font-size: 13px; color: #7ab4ff;">🧥 胸掛內容</h3>
+                                        <div id="rig-grid" class="grid-container" style="background-image: linear-gradient(to right,#2a4a7a 1px,transparent 1px),linear-gradient(to bottom,#2a4a7a 1px,transparent 1px); background-size:50px 50px;"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Backpack Row: equip slot icon + backpack contents panel -->
+                                <div style="display: flex; gap: 10px; margin-bottom: 6px; align-items: flex-start;">
+                                    <div class="equip-slot-container" style="flex: 0 0 auto;">
+                                        <div class="slot-bg-text">背包裝備</div>
+                                        <div id="backpack-equip-grid" class="grid-container" style="width: 150px; height: 150px;"></div>
+                                    </div>
+                                    <div id="backpack-panel" class="inventory-section" style="background: #1e1e1e; border: 1px solid #333; padding: 8px; min-width: 120px;">
+                                        <h3 style="margin: 0 0 6px 0; font-size: 13px; color: #acc;">🎒 背包內容</h3>
+                                        <div id="backpack-grid" class="grid-container"></div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

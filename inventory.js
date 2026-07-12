@@ -18,6 +18,8 @@ export class InventorySystem {
         this.helmetSlot = this.createGrid(2, 2);
         this.hotbarSlot = this.createGrid(5, 1);
         this.backpackSlot = this.createGrid(3, 3);
+        this.rigSlot = this.createGrid(3, 2);    // Chest rig equipment slot
+        this.rig = this.createGrid(0, 0);         // Chest rig inner capacity (dynamic)
 
         // Secure Container starts as initial
         this.secureContainerType = "初始保險";
@@ -40,8 +42,19 @@ export class InventorySystem {
             this.backpack = this.createGrid(0, 0);
         }
 
+        // Equip default rig and initialize rig capacity
+        this.addItem("基礎胸掛", "rigSlot", 0, 0, false);
+        const rigItem = this.items.find(i => i.container === 'rigSlot');
+        if (rigItem) {
+            const dbRig = ItemDatabase[rigItem.typeId];
+            this.rig = this.createGrid(dbRig.capW, dbRig.capH);
+        }
+
         this.addItem("M7", "backpack", 0, 0, false);
         this.addItem("藍甲", "backpack", 0, 2, false);
+        // Add a medkit and ammo to the rig by default (shows off rig panel)
+        this.addItem("快速回血針", "rig", 0, 0, false);
+        this.addItem("小口徑-1級綠彈", "rig", 1, 0, false);
 
         // Setup initial knife
         this.addItem("刀", "meleeSlot", 0, 0, false);
@@ -148,9 +161,11 @@ export class InventorySystem {
             if (dbItem.type !== 'helmet') return { success: false };
         } else if (targetContainerName === 'backpackSlot') {
             if (dbItem.type !== 'backpack') return { success: false };
+        } else if (targetContainerName === 'rigSlot') {
+            if (dbItem.type !== 'rig') return { success: false };
         } else if (targetContainerName === 'secureContainer') {
             // Cannot place backpacks, rigs, or secure containers inside the secure container.
-            if (['backpack', 'secure'].includes(dbItem.type)) return { success: false };
+            if (['backpack', 'rig', 'secure'].includes(dbItem.type)) return { success: false };
         }
 
         // Temporarily free source
@@ -170,7 +185,7 @@ export class InventorySystem {
             item.rotated = testRotated;
             this.occupyGrid(item, targetContainer);
 
-            // Placement is successful, we check for backpack un-equipping logic before finalizing
+            // Placement is successful, we check for backpack/rig un-equipping logic before finalizing
             if (sourceContainerName === 'backpackSlot' && targetContainerName !== 'backpackSlot') {
                 const backpackItems = this.items.filter(i => i.container === 'backpack');
                 for (let bItem of backpackItems) {
@@ -192,9 +207,35 @@ export class InventorySystem {
                 }
             }
 
+            // When rig is unequipped in lobby, spill rig contents to stash
+            if (sourceContainerName === 'rigSlot' && targetContainerName !== 'rigSlot') {
+                const rigItems = this.items.filter(i => i.container === 'rig');
+                for (let rItem of rigItems) {
+                    const rDbItem = ItemDatabase[rItem.typeId];
+                    const slot = this.findFreeSlot(rDbItem.gridW, rDbItem.gridH, this.stash);
+                    if (slot) {
+                        this.freeGrid(rItem, this.rig);
+                        rItem.container = 'stash';
+                        rItem.x = slot.x;
+                        rItem.y = slot.y;
+                        rItem.rotated = slot.rotated;
+                        this.occupyGrid(rItem, this.stash);
+                    } else {
+                        console.log("Stash full, discarding rig item: " + rItem.typeId);
+                        this.freeGrid(rItem, this.rig);
+                        const idx = this.items.indexOf(rItem);
+                        if (idx > -1) this.items.splice(idx, 1);
+                    }
+                }
+            }
+
             // If we moved a backpack out of the backpackSlot, collapse capacity
             if (sourceContainerName === 'backpackSlot' || targetContainerName === 'backpackSlot') {
                 this.updateBackpackCapacity();
+            }
+            // If we moved a rig, update rig capacity
+            if (sourceContainerName === 'rigSlot' || targetContainerName === 'rigSlot') {
+                this.updateRigCapacity();
             }
 
             this.updatePlayerWeight();
@@ -219,10 +260,11 @@ export class InventorySystem {
         } else if (dbItem.type === 'armor') targetContainers = ['armorSlot'];
         else if (dbItem.type === 'helmet') targetContainers = ['helmetSlot'];
         else if (dbItem.type === 'backpack') targetContainers = ['backpackSlot'];
+        else if (dbItem.type === 'rig') targetContainers = ['rigSlot'];
         else if (dbItem.type === 'melee') targetContainers = ['meleeSlot'];
         else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff' || dbItem.type === 'throwable' || dbItem.type === 'ammo') {
-            // First try hotbar, then pockets/secure
-            targetContainers = ['hotbarSlot', 'secureContainer'];
+            // Priority: hotbar -> rig -> backpack -> secure
+            targetContainers = ['hotbarSlot', 'rig', 'backpack', 'secureContainer'];
         }
 
         // Try equipping it
@@ -243,8 +285,12 @@ export class InventorySystem {
             }
         }
         
-        // Overflow to backpack when item from stash/secureContainer doesn't fit gear slots
-        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'secure'].includes(dbItem.type)) {
+        // Overflow to rig then backpack when item from stash/secureContainer doesn't fit gear slots
+        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'rig', 'secure'].includes(dbItem.type)) {
+            const rigSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.rig);
+            if (rigSlot) {
+                return this.moveItem(itemId, 'rig', rigSlot.x, rigSlot.y, rigSlot.rotated).success;
+            }
             const bpSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.backpack);
             if (bpSlot) {
                 return this.moveItem(itemId, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated).success;
@@ -276,9 +322,11 @@ export class InventorySystem {
         } else if (dbItem.type === 'armor') targetContainers = ['armorSlot'];
         else if (dbItem.type === 'helmet') targetContainers = ['helmetSlot'];
         else if (dbItem.type === 'backpack') targetContainers = ['backpackSlot'];
+        else if (dbItem.type === 'rig') targetContainers = ['rigSlot'];
         else if (dbItem.type === 'melee') targetContainers = ['meleeSlot'];
         else if (dbItem.type === 'medical' || dbItem.type === 'medical-buff' || dbItem.type === 'throwable' || dbItem.type === 'ammo') {
-            targetContainers = ['hotbarSlot', 'secureContainer'];
+            // Priority: hotbar -> rig -> backpack -> secure
+            targetContainers = ['hotbarSlot', 'rig', 'backpack', 'secureContainer'];
         }
 
         for (let cName of targetContainers) {
@@ -297,8 +345,12 @@ export class InventorySystem {
             }
         }
 
-        // Overflow to backpack when item does not fit gear slots (no stash unequip fallback)
-        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'secure'].includes(dbItem.type)) {
+        // Overflow to rig then backpack when item does not fit gear slots (no stash unequip fallback)
+        if ((item.container === 'stash' || item.container === 'secureContainer') && !['backpack', 'rig', 'secure'].includes(dbItem.type)) {
+            const rigSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.rig);
+            if (rigSlot) {
+                return this.moveItem(itemId, 'rig', rigSlot.x, rigSlot.y, rigSlot.rotated).success;
+            }
             const bpSlot = this.findFreeSlot(dbItem.gridW, dbItem.gridH, this.backpack);
             if (bpSlot) {
                 return this.moveItem(itemId, 'backpack', bpSlot.x, bpSlot.y, bpSlot.rotated).success;
@@ -325,7 +377,8 @@ export class InventorySystem {
             if (targetName === 'armorSlot') return dbItem.type === 'armor';
             if (targetName === 'helmetSlot') return dbItem.type === 'helmet';
             if (targetName === 'backpackSlot') return dbItem.type === 'backpack';
-            if (targetName === 'secureContainer') return !['backpack', 'secure'].includes(dbItem.type);
+            if (targetName === 'rigSlot') return dbItem.type === 'rig';
+            if (targetName === 'secureContainer') return !['backpack', 'rig', 'secure'].includes(dbItem.type);
             return true;
         };
 
@@ -353,6 +406,9 @@ export class InventorySystem {
             
             if (item1.container === 'backpackSlot' || item2.container === 'backpackSlot') {
                 this.updateBackpackCapacity();
+            }
+            if (item1.container === 'rigSlot' || item2.container === 'rigSlot') {
+                this.updateRigCapacity();
             }
             this.updatePlayerWeight();
             return true;
@@ -405,6 +461,23 @@ export class InventorySystem {
             })
         } else {
             this.backpack = this.createGrid(0, 0);
+        }
+    }
+
+    updateRigCapacity() {
+        const rigItem = this.items.find(i => i.container === 'rigSlot');
+        if (rigItem) {
+            const dbItem = ItemDatabase[rigItem.typeId];
+            const newGrid = this.createGrid(dbItem.capW, dbItem.capH);
+            this.rig = newGrid;
+            // Re-occupy rig items
+            this.items.forEach(i => {
+                if (i.container === 'rig') {
+                    this.occupyGrid(i, this.rig);
+                }
+            });
+        } else {
+            this.rig = this.createGrid(0, 0);
         }
     }
 
@@ -538,6 +611,7 @@ export class InventorySystem {
 
         // Backpack capacity gets wiped because the backpack slot is cleared
         this.backpack = this.createGrid(0, 0);
+        this.rig = this.createGrid(0, 0);
         this.loot = this.createGrid(10, 10);
         this.primaryWep = this.createGrid(5, 2);
         this.primaryWep2 = this.createGrid(5, 2);
@@ -547,6 +621,7 @@ export class InventorySystem {
         this.helmetSlot = this.createGrid(2, 2);
         this.hotbarSlot = this.createGrid(5, 1);
         this.backpackSlot = this.createGrid(3, 3);
+        this.rigSlot = this.createGrid(3, 2);
 
         this.addItem("刀", "meleeSlot", 0, 0, false);
 
