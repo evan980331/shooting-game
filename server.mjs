@@ -28,7 +28,7 @@ wss.on('connection', (ws) => {
             if (data.type === 'input') {
                 sim.applyInput(playerId, data);
             } else if (data.type === 'resetPlayer') {
-                const p = sim.state.players[playerId];
+                const p = sim.gameState.players[playerId];
                 if (p) {
                     sim.removePlayer(playerId);
                     sim.addPlayer(playerId);

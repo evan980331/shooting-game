@@ -1,5 +1,7 @@
 import { InventorySystem } from './inventory.js?v=1778846971';
 import { ItemDatabase } from './db.js?v=1778846971';
+import { GameState } from './core/GameState.js?v=1778846971';
+import { Player } from './gameplay/Player.js?v=1778846971';
 
 export class MathUtils {
     static seed = 1234567;
@@ -12,19 +14,13 @@ export class MathUtils {
 export class GameSimulation {
     constructor() {
         this.nextBulletId = 1;
-        this.state = {
-            players: {},
-            bullets: [],
-            bots: [],
-            effects: [],
-            grass: [],
-            groundItems: [],
-            time: 0
-        };
+
+        // P0-1: Centralized game state
+        this.gameState = new GameState();
 
         // Initialize Grass (many small bushes)
         for (let i = 0; i < 240; i++) {
-            this.state.grass.push({
+            this.gameState.grass.push({
                 x: 200 + MathUtils.seededRandom() * 7600,
                 y: 200 + MathUtils.seededRandom() * 7600,
                 w: 40 + MathUtils.seededRandom() * 40,
@@ -33,7 +29,7 @@ export class GameSimulation {
             });
         }
 
-        this.walls = [
+        this.gameState.walls = [
             // Outer limits (8000x8000)
             { x: 4000, y: -20, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
             { x: 4000, y: 8020, w: 8040, h: 40, color: [0.3, 0.3, 0.3, 1] },
@@ -54,7 +50,7 @@ export class GameSimulation {
             { x: 4000, y: 7000, w: 2000, h: 80, color: [0.5, 0.5, 0.5, 1] }
         ];
 
-        this.spawnPoints = [
+        this.gameState.spawnPoints = [
             { x: 800, y: 800, name: 'TL' },
             { x: 7200, y: 800, name: 'TR' },
             { x: 800, y: 7200, name: 'BL' },
@@ -62,7 +58,7 @@ export class GameSimulation {
             { x: 4000, y: 4000, name: 'C' }
         ];
 
-        this.extractionZones = [
+        this.gameState.extractionZones = [
             { x: 600, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TL_EXIT' },
             { x: 7400, y: 600, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'TR_EXIT' },
             { x: 600, y: 7400, w: 600, h: 600, color: [0, 1, 0.5, 0.3], name: 'BL_EXIT' },
@@ -71,68 +67,25 @@ export class GameSimulation {
 
         this.isInMenu = false;
         this.currentMap = 1;
-        this.gameTimer = 900;
         
         // Single player / local client flags
         // Map objects (Support for Editor v9.5)
         this.safes = [];
         this.lootPoints = [];
         this.buildings = [];
-
-        this.events = {
-            inventoryDirty: false,
-            playerDied: false,
-            playerWon: false,
-            sessionReset: false,
-            messages: []
-        };
     }
 
     pushMessage(msg) {
-        this.events.messages.push(msg);
+        this.gameState.pushMessage(msg);
     }
 
     addPlayer(id) {
-        this.state.players[id] = {
-            id: id,
-            x: 2000,
-            y: 2000,
-            size: 30,
-            rotation: 0,
-            health: 100,
-            isBleeding: false,
-            isHeavyBleeding: false,
-            hasHeadInjury: false,
-            hasTorsoInjury: false,
-            pkActiveTime: 0,
-            isHealing: false,
-            isReloading: false,
-            reloadTimer: 0,
-            healOverRate: 0,
-            weight: 0,
-            baseSpeed: 200,
-            color: [0.1, 0.6, 1, 1],
-            isDead: false,
-            isExtracting: false,
-            extractionTimer: 10.0,
-            won: false,
-            visualJitter: 0,
-            recoilOffset: { x: 0, y: 0 },
-            cameraZoom: 1.5,
-            // Internal state
-            consecutiveShots: 0,
-            lastShotTime: 0,
-            shootTimer: 0,
-            money: 100000,
-            input: { moveX: 0, moveY: 0, isShooting: false },
-            inventory: null,
-            targetExitName: '' 
-        };
-        const p = this.state.players[id];
+        const p = new Player(id, this.gameState);
+        this.gameState.addPlayer(p);
 
         // Assign spawn point and exit zone (TL -> BL, etc.)
-        const spawnIdx = Math.floor(MathUtils.seededRandom() * this.spawnPoints.length);
-        const spawn = this.spawnPoints[spawnIdx];
+        const spawnIdx = Math.floor(MathUtils.seededRandom() * this.gameState.spawnPoints.length);
+        const spawn = this.gameState.spawnPoints[spawnIdx];
         p.x = spawn.x;
         p.y = spawn.y;
         
@@ -147,11 +100,11 @@ export class GameSimulation {
     }
 
     removePlayer(id) {
-        delete this.state.players[id];
+        this.gameState.removePlayer(id);
     }
 
     applyInput(id, input) {
-        const p = this.state.players[id];
+        const p = this.gameState.players[id];
         if (!p) return;
         if (input.move) {
             p.input.moveX = input.move.x;
@@ -170,16 +123,16 @@ export class GameSimulation {
 
     exportState() {
         const payload = {
-            time: this.state.time,
+            time: this.gameState.time,
             players: {},
-            bullets: this.state.bullets,
-            bots: this.state.bots,
-            effects: this.state.effects,
-            grass: this.state.grass,
-            groundItems: this.state.groundItems
+            bullets: this.gameState.bullets,
+            bots: this.gameState.bots,
+            effects: this.gameState.effects,
+            grass: this.gameState.grass,
+            groundItems: this.gameState.groundItems
         };
-        for (let id in this.state.players) {
-            const p = this.state.players[id];
+        for (let id in this.gameState.players) {
+            const p = this.gameState.players[id];
             payload.players[id] = {
                 id: p.id,
                 x: p.x, y: p.y, rotation: p.rotation, size: p.size,
@@ -200,17 +153,17 @@ export class GameSimulation {
 
     importState(json) {
         const parsed = JSON.parse(json);
-        this.state.time = parsed.time;
-        this.state.bullets = parsed.bullets;
-        this.state.bots = parsed.bots;
-        this.state.effects = parsed.effects;
-        this.state.grass = parsed.grass || [];
-        this.state.groundItems = parsed.groundItems || [];
+        this.gameState.time = parsed.time;
+        this.gameState.bullets = parsed.bullets;
+        this.gameState.bots = parsed.bots;
+        this.gameState.effects = parsed.effects;
+        this.gameState.grass = parsed.grass || [];
+        this.gameState.groundItems = parsed.groundItems || [];
         
         for (let id in parsed.players) {
-            if (!this.state.players[id]) this.addPlayer(id);
+            if (!this.gameState.players[id]) this.addPlayer(id);
             const sp = parsed.players[id];
-            const p = this.state.players[id];
+            const p = this.gameState.players[id];
             
             // Merge raw data
             Object.assign(p, sp); 
@@ -221,22 +174,6 @@ export class GameSimulation {
                 p.inventory.backpack = sp.inventory.backpack;
             }
         }
-    }
-
-    getSpeedMultiplier(p) {
-        let weightPenalty = p.weight * 0.01;
-        if (p.weightlessTimer > 0) weightPenalty = 0;
-
-        let mult = 1.0 - weightPenalty;
-        if (mult > 1.05) mult = 1.05;
-
-        if (p.hasTorsoInjury) mult -= 0.15;
-        if (p.isHealing) mult *= 0.50;
-        if (p.isRepairing) mult *= 0.50;
-        if (p.isGassed) mult *= 0.95;
-        if (p.adrenalineTimer > 0) mult *= 1.10;
-
-        return Math.max(0.1, mult);
     }
 
     AABBIntersect(rect1, rect2) {
@@ -257,7 +194,7 @@ export class GameSimulation {
         const checkW = overrideW !== null ? overrideW : 30;
         const checkH = overrideH !== null ? overrideH : 30;
         const targetRect = { x: nx, y: ny, w: checkW, h: checkH };
-        for (let w of this.walls) {
+        for (let w of this.gameState.walls) {
             if (this.AABBIntersect(targetRect, w)) return true;
         }
         return false;
@@ -265,21 +202,21 @@ export class GameSimulation {
 
     update(dt) {
         if (this.isInMenu) return;
-        this.state.time += dt;
+        this.gameState.time += dt;
 
-        for (let id in this.state.players) {
-            this.updatePlayer(this.state.players[id], dt);
+        for (let id in this.gameState.players) {
+            this.updatePlayer(this.gameState.players[id], dt);
         }
 
         this.updateBullets(dt);
         this.updateBots(dt);
 
-        if (this.gameTimer > 0) {
-            this.gameTimer -= dt;
-            if (this.gameTimer <= 0) {
-                this.gameTimer = 0;
-                for(let id in this.state.players) {
-                    this.die(this.state.players[id]);
+        if (this.gameState.gameTimer > 0) {
+            this.gameState.gameTimer -= dt;
+            if (this.gameState.gameTimer <= 0) {
+                this.gameState.gameTimer = 0;
+                for(let id in this.gameState.players) {
+                    this.gameState.players[id].die();
                 }
             }
         }
@@ -292,12 +229,12 @@ export class GameSimulation {
         if (p.input.isShooting && p.shootTimer <= 0) {
             if (p.isRepairing) {
                 p.isRepairing = false;
-                this.events.inventoryDirty = true;
+                this.gameState.events.inventoryDirty = true;
             }
             this.shoot(p);
         }
 
-        const mult = this.getSpeedMultiplier(p);
+        const mult = p.getSpeedMultiplier();
         const speed = p.baseSpeed * mult * dt;
 
         let moveX = p.input.moveX;
@@ -316,15 +253,15 @@ export class GameSimulation {
             }
         }
 
-        this.updatePlayerState(p, dt);
+        p.updateState(dt);
         this.updateEffects(p, dt);
         this.updateRecoil(p, dt);
         this.updateTimersAndZones(p, dt);
     }
 
     updateBots(dt) {
-        if (!this.state.bots) return;
-        for (let b of this.state.bots) {
+        if (!this.gameState.bots) return;
+        for (let b of this.gameState.bots) {
             if (b.health <= 0) continue;
             b.shootTimer -= dt;
             if (b.shootTimer <= 0 && b.weapon) {
@@ -337,7 +274,7 @@ export class GameSimulation {
                 let angleOffset = (MathUtils.seededRandom() * 2 - 1) * baseSpread;
                 let finalRot = b.rotation + angleOffset;
                 
-                this.state.bullets.push({
+                this.gameState.bullets.push({
                     x: b.x + Math.cos(b.rotation) * 25,
                     y: b.y + Math.sin(b.rotation) * 25,
                     rot: finalRot,
@@ -352,156 +289,10 @@ export class GameSimulation {
         }
     }
 
-    updatePlayerState(p, dt) {
-        if (p.pkActiveTime > 0) p.pkActiveTime -= dt;
-        if (p.adrenalineTimer > 0) {
-            p.adrenalineTimer -= dt;
-            p.bleedCount = 0;
-            p.isBleeding = false;
-            p.isHeavyBleeding = false;
-        }
-        if (p.strengthTimer > 0) p.strengthTimer -= dt;
-        if (p.weightlessTimer > 0) p.weightlessTimer -= dt;
-
-        let shouldTakeTickDmg = p.pkActiveTime <= 0;
-
-        if (!p.bleedCount) p.bleedCount = 0;
-        const bleedCount = p.bleedCount;
-
-        if (bleedCount > 0 && !p.isHeavyBleeding && shouldTakeTickDmg) {
-            const bleedInterval = 2.0; 
-            p.bleedTimer = (p.bleedTimer || 0) + dt;
-            if (p.bleedTimer >= bleedInterval) {
-                p.bleedTimer -= bleedInterval;
-                let damage = bleedCount === 2 ? 2 : 1; 
-                if (p.health > 1) {
-                    p.health = Math.max(1, p.health - damage);
-                }
-            }
-        } else if (bleedCount === 0 && !p.isHeavyBleeding) {
-            p.bleedTimer = 0;
-        }
-
-        p.isBleeding = bleedCount > 0;
-
-        if (p.isHeavyBleeding && shouldTakeTickDmg) {
-            p.heavyBleedTimer = (p.heavyBleedTimer || 0) + dt;
-            if (p.heavyBleedTimer >= 1.0) {
-                p.heavyBleedTimer -= 1.0;
-                p.health -= 1;
-            }
-        } else if (!p.isHeavyBleeding) {
-            p.heavyBleedTimer = 0;
-        }
-
-        if (p.hasHeadInjury && shouldTakeTickDmg) p.health -= 0.5 * dt;
-        if (p.hasTorsoInjury && shouldTakeTickDmg) p.health -= 1.0 * dt;
-
-        if (p.healOverRate > 0) {
-            p.health += p.healOverRate * dt;
-            if (p.health > 100) p.health = 100;
-            if (p.healOverTimer !== undefined && p.healOverTimer > 0) {
-                p.healOverTimer -= dt;
-                if (p.healOverTimer <= 0 || p.health >= 100) {
-                    p.healOverRate = 0;
-                    p.healOverTimer = 0;
-                    p.healOverName = '';
-                }
-            }
-        }
-
-        if (p.health <= 0) {
-            p.health = 0;
-            if (!p.isDead) this.die(p);
-        }
-
-        if (p.isReloading) {
-            p.reloadTimer -= dt;
-            if (p.reloadTimer <= 0) {
-                p.isReloading = false;
-                if (p.reloadTargetWeapon) {
-                    p.reloadTargetWeapon.currentMag += p.reloadAmount;
-                }
-                this.events.inventoryDirty = true;
-            }
-        }
-
-        if (p.isRepairing) {
-            if (p.repairPrepTimer > 0) {
-                p.repairPrepTimer -= dt;
-            } else {
-                const dbKit = ItemDatabase[p.repairKit.typeId];
-                const dbArmor = ItemDatabase[p.repairTarget.typeId];
-                
-                if (dbKit && dbArmor) {
-                    let consumeAmt = p.repairUseRate * dt;
-                    consumeAmt = Math.min(consumeAmt, p.repairKit.capacity);
-                    
-                    let missingDur = p.repairTarget.maxDurability - p.repairTarget.durability;
-                    let requiredConsume = missingDur / p.repairEfficiency;
-                    consumeAmt = Math.min(consumeAmt, requiredConsume);
-                    
-                    if (consumeAmt > 0) {
-                        p.repairKit.capacity -= consumeAmt;
-                        p.repairTarget.durability += consumeAmt * p.repairEfficiency;
-                        this.events.inventoryDirty = true;
-                    }
-                    
-                    if (p.repairKit.capacity <= 0 || p.repairTarget.durability >= p.repairTarget.maxDurability) {
-                        p.isRepairing = false;
-                        if (p.repairKit.capacity <= 0) {
-                            let idx = p.inventory.items.findIndex(i => i.id === p.repairKit.id);
-                            if (idx !== -1) {
-                                p.inventory.freeGrid(p.repairKit, p.inventory[p.repairKit.container]);
-                                p.inventory.items.splice(idx, 1);
-                            }
-                        }
-                        this.events.inventoryDirty = true;
-                    }
-                } else {
-                    p.isRepairing = false;
-                }
-            }
-        }
-
-        if (p.isHealing) {
-            p.healTimer -= dt;
-            if (p.healTimer <= 0) {
-                p.isHealing = false;
-                const targetItem = p.healTargetItem;
-                const dbItem = p.healDbItem;
-                if (!targetItem || !dbItem) return;
-                
-                const idx = p.inventory.items.findIndex(i => i.id === targetItem.id);
-                if (idx !== -1) {
-                    if (dbItem.type === 'medical-buff') {
-                        if (dbItem.effectType === 'adrenaline') p.adrenalineTimer = (dbItem.effectDuration / 1000) || 60;
-                        if (dbItem.effectType === 'strength') p.strengthTimer = (dbItem.effectDuration / 1000) || 60;
-                        if (dbItem.effectType === 'weightless') p.weightlessTimer = (dbItem.effectDuration / 1000) || 60;
-                        targetItem.capacity -= 1;
-                    } else if (dbItem.type === 'medical') {
-                        if (dbItem.healAmount) p.health = Math.min(100, p.health + dbItem.healAmount);
-                        if (dbItem.healOverTime) { p.healOverRate = dbItem.healOverTime.rate; p.healOverTimer = dbItem.healOverTime.duration; p.healOverName = dbItem.name; }
-                        if (dbItem.cureBleed) { p.isBleeding = false; p.bleedCount = 0; }
-                        if (dbItem.cureHeavyBleed) p.isHeavyBleeding = false;
-                        if (dbItem.painkiller) p.pkActiveTime += dbItem.painkiller;
-                        targetItem.capacity -= 1;
-                    } else {
-                        targetItem.capacity = 0; // Default consume
-                    }
-
-                    if (targetItem.capacity <= 0 || targetItem.capacity === undefined) {
-                        p.inventory.items.splice(idx, 1);
-                        p.inventory.freeGrid(targetItem, p.inventory[targetItem.container]);
-                    }
-                    this.events.inventoryDirty = true;
-                }
-            }
-        }
-    }
+    // P0-2: updatePlayerState moved to Player.updateState()
 
     spawnEffect(playerId, throwData) {
-        const p = this.state.players[playerId];
+        const p = this.gameState.players[playerId];
         if (!p || p.isDead || p.won) return;
         
         let r = 150;
@@ -518,26 +309,26 @@ export class GameSimulation {
             active: false,
             damage: throwData.damage || 0
         };
-        this.state.effects.push(fx);
+        this.gameState.effects.push(fx);
     }
 
     updateEffects(p, dt) {
         p.isGassed = false;
-        for (let i = this.state.effects.length - 1; i >= 0; i--) {
-            let fx = this.state.effects[i];
+        for (let i = this.gameState.effects.length - 1; i >= 0; i--) {
+            let fx = this.gameState.effects[i];
             if (!fx.active) {
                 fx.fuse -= dt;
                 if (fx.fuse <= 0) {
                     fx.active = true;
                     if (fx.type === 'frag') {
-                        for(let id in this.state.players) {
-                            let ep = this.state.players[id];
+                        for(let id in this.gameState.players) {
+                            let ep = this.gameState.players[id];
                             let dist = Math.hypot(ep.x - fx.x, ep.y - fx.y);
                             if (dist < fx.radius) {
                                 this.damagePlayer(ep, fx.damage * 0.7, 'torso');
                             }
                         }
-                        this.state.effects.splice(i, 1);
+                        this.gameState.effects.splice(i, 1);
                     }
                 }
             } else {
@@ -550,7 +341,7 @@ export class GameSimulation {
                     }
                 }
                 if (fx.timer <= 0) {
-                    this.state.effects.splice(i, 1);
+                    this.gameState.effects.splice(i, 1);
                 }
             }
         }
@@ -573,7 +364,7 @@ export class GameSimulation {
     updateTimersAndZones(p, dt) {
         const playerRect = { x: p.x, y: p.y, w: p.size, h: p.size };
         let inZone = false;
-        for (let z of this.extractionZones) {
+        for (let z of this.gameState.extractionZones) {
             // Only allow designated exit
             if (p.targetExitName && z.name !== p.targetExitName) continue;
             
@@ -587,7 +378,7 @@ export class GameSimulation {
             p.isExtracting = true;
             p.extractionTimer -= dt;
             if (p.extractionTimer <= 0) {
-                this.win(p);
+                p.win();
             }
         } else {
             p.isExtracting = false;
@@ -632,7 +423,7 @@ export class GameSimulation {
         if (!p.consecutiveShots) p.consecutiveShots = 0;
         if (!p.lastShotTime) p.lastShotTime = 0;
         
-        let nowMs = this.state.time * 1000;
+        let nowMs = this.gameState.time * 1000;
         let frInterval = 10000 / fr; 
         
         if (nowMs - p.lastShotTime > frInterval + 100) {
@@ -671,7 +462,7 @@ export class GameSimulation {
             let bulletSpeed = Math.max(10, s.velocity) * 20;
             let effectiveRange = Math.max(10, s.range) * 20;
 
-            this.state.bullets.push({
+            this.gameState.bullets.push({
                 x: (p.x + p.recoilOffset.x) + Math.cos(p.rotation) * 25,
                 y: (p.y + p.recoilOffset.y) + Math.sin(p.rotation) * 25,
                 rot: finalRot,
@@ -705,8 +496,8 @@ export class GameSimulation {
     }
 
     updateBullets(dt) {
-        for (let i = this.state.bullets.length - 1; i >= 0; i--) {
-            let b = this.state.bullets[i];
+        for (let i = this.gameState.bullets.length - 1; i >= 0; i--) {
+            let b = this.gameState.bullets[i];
 
             let moveX = Math.cos(b.rot) * b.speed * dt;
             let moveY = Math.sin(b.rot) * b.speed * dt;
@@ -722,9 +513,9 @@ export class GameSimulation {
 
             // Check collision with ALL players
             let hitPlayer = false;
-            for (let pid in this.state.players) {
+            for (let pid in this.gameState.players) {
                 if (b.owner === pid) continue; // Don't hurt yourself
-                let cp = this.state.players[pid];
+                let cp = this.gameState.players[pid];
                 if (cp.isDead) continue;
                 
                 let dist = Math.hypot(cp.x - b.x, cp.y - b.y);
@@ -737,14 +528,14 @@ export class GameSimulation {
             }
 
             if (hitPlayer) {
-                this.state.bullets.splice(i, 1);
+                this.gameState.bullets.splice(i, 1);
                 continue;
             }
 
             // Check bots
-            if (this.state.bots) {
+            if (this.gameState.bots) {
                 let hitBot = false;
-                for (let bot of this.state.bots) {
+                for (let bot of this.gameState.bots) {
                     if (bot.health <= 0) continue;
                     let dist = Math.hypot(bot.x - b.x, bot.y - b.y);
                     if (dist < (bot.size / 2) + 5) {
@@ -782,18 +573,18 @@ export class GameSimulation {
                     }
                 }
                 if (hitBot) {
-                    this.state.bullets.splice(i, 1);
+                    this.gameState.bullets.splice(i, 1);
                     continue;
                 }
             }
 
             if (this.checkWallCollision(b.x, b.y, 10, 4)) {
-                this.state.bullets.splice(i, 1);
+                this.gameState.bullets.splice(i, 1);
                 continue;
             }
 
             if (b.distTravelled > b.maxRange * 1.2) {
-                this.state.bullets.splice(i, 1);
+                this.gameState.bullets.splice(i, 1);
                 continue;
             }
         }
@@ -824,7 +615,7 @@ export class GameSimulation {
                     amount -= armorDmg; 
                     armorItem.durability = Math.max(0, armorItem.durability);
                 }
-                this.events.inventoryDirty = true;
+                this.gameState.events.inventoryDirty = true;
             } else if (!p.hasTorsoInjury && amount > 15) {
                 p.hasTorsoInjury = true;
             }
@@ -848,7 +639,7 @@ export class GameSimulation {
                     amount -= armorDmg;
                     helmetItem.durability = Math.max(0, helmetItem.durability);
                 }
-                this.events.inventoryDirty = true;
+                this.gameState.events.inventoryDirty = true;
             } else if (!p.hasHeadInjury && amount > 5) {
                 p.hasHeadInjury = true;
             }
@@ -875,26 +666,15 @@ export class GameSimulation {
 
         if (p.health <= 0) {
             p.health = 0;
-            this.die(p);
+            p.die();
         }
     }
 
-    die(p) {
-        p.isDead = true;
-        p.health = 0;
-        p.inventory.clearOnDeath();
-        this.events.inventoryDirty = true;
-        this.events.playerDied = true;
-    }
-
-    win(p) {
-        p.won = true;
-        this.events.playerWon = true;
-    }
+    // P0-2: die() and win() moved to Player.die() and Player.win()
 
     resetSession() {
-        for (let pid in this.state.players) {
-            let p = this.state.players[pid];
+        for (let pid in this.gameState.players) {
+            let p = this.gameState.players[pid];
             p.x = 2000; p.y = 2000;
             p.health = 100; p.weight = 0;
             p.isDead = false; p.won = false;
@@ -905,18 +685,18 @@ export class GameSimulation {
             p.weightlessTimer = 0; p.isGassed = false; p.healOverRate = 0;
             p.isExtracting = false; p.extractionTimer = 10.0;
         }
-        this.state.effects = [];
-        this.state.bullets = [];
-        this.state.bots = [];
-        this.gameTimer = 900;
+        this.gameState.effects = [];
+        this.gameState.bullets = [];
+        this.gameState.bots = [];
+        this.gameState.gameTimer = 900;
         
         this.isInMenu = true;
-        this.events.inventoryDirty = true;
-        this.events.sessionReset = true;
+        this.gameState.events.inventoryDirty = true;
+        this.gameState.events.sessionReset = true;
     }
 
     spawnTestBot() {
-        this.state.bots = [{
+        this.gameState.bots = [{
             x: 1800, y: 2000,
             size: 30, rotation: Math.PI,
             health: 100, maxHealth: 100,
