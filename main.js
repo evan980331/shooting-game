@@ -81,8 +81,8 @@ class Game {
         
         this.player = this.gameState.players[this.localPlayerId];
         this.input = this.player.input;
-        this.walls = this.gameState.walls;
-        this.extractionZones = this.gameState.extractionZones;
+        Object.defineProperty(this, 'walls', { get: () => this.gameState.walls });
+        Object.defineProperty(this, 'extractionZones', { get: () => this.gameState.extractionZones });
         
         Object.defineProperty(this, 'bullets', { get: () => this.gameState.bullets });
         Object.defineProperty(this, 'effects', { get: () => this.gameState.effects });
