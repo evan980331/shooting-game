@@ -67,6 +67,13 @@ export class GameSimulation {
 
         this.isInMenu = false;
         this.currentMap = 1;
+
+        // P0-1: nextGroundItemId centralized to GameState
+        Object.defineProperty(this, 'nextGroundItemId', {
+            get() { return this.gameState.nextGroundItemId; },
+            set(v) { this.gameState.nextGroundItemId = v; },
+            enumerable: true
+        });
         
         // Single player / local client flags
         // Map objects (Support for Editor v9.5)

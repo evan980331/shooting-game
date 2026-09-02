@@ -596,7 +596,7 @@ class Game {
         const offsetX = (Math.random() - 0.5) * 40;
         const offsetY = (Math.random() - 0.5) * 40;
         const gItem = {
-            id: this.sim.nextGroundItemId ? this.sim.nextGroundItemId++ : (this.sim.nextGroundItemId = 1),
+            id: this.gameState.getNewGroundItemId(),
             typeId: freshItem.typeId,
             x: this.player.x + offsetX,
             y: this.player.y + offsetY,

@@ -15,6 +15,7 @@ export class GameState {
         this.grass = [];
         this.groundItems = [];
         this.time = 0;
+        this.nextGroundItemId = 1;
 
         // World / map data
         this.walls = [];
@@ -65,5 +66,9 @@ export class GameState {
         this.events.playerDied = false;
         this.events.playerWon = false;
         this.events.sessionReset = false;
+    }
+
+    getNewGroundItemId() {
+        return this.nextGroundItemId++;
     }
 }
