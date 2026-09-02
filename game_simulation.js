@@ -2,6 +2,7 @@ import { InventorySystem } from './inventory.js?v=1778846971';
 import { ItemDatabase } from './db.js?v=1778846971';
 import { GameState } from './core/GameState.js?v=1778846971';
 import { Player } from './gameplay/Player.js?v=1778846971';
+import { Weapon } from './gameplay/Weapon.js?v=1778846971';
 
 export class MathUtils {
     static seed = 1234567;
@@ -272,21 +273,19 @@ export class GameSimulation {
             if (b.health <= 0) continue;
             b.shootTimer -= dt;
             if (b.shootTimer <= 0 && b.weapon) {
-                let s = b.weapon.stats;
-                b.shootTimer = 10.0 / Math.max(1, s.fireRate);
-                let bulletSpeed = Math.max(10, s.velocity) * 20;
-                let effectiveRange = Math.max(10, s.range) * 20;
-                
-                let baseSpread = 0.43 * (1 - (s.accuracy / 100));
-                let angleOffset = (MathUtils.seededRandom() * 2 - 1) * baseSpread;
-                let finalRot = b.rotation + angleOffset;
+                const botWeapon = new Weapon(b.weapon, b.weapon);
+                b.shootTimer = botWeapon.cooldown;
+                const { bulletSpeed, effectiveRange } = botWeapon.getProjectileData();
+                const baseSpread = 0.43 * (1 - (botWeapon.accuracy / 100));
+                const angleOffset = (MathUtils.seededRandom() * 2 - 1) * baseSpread;
+                const finalRot = b.rotation + angleOffset;
                 
                 this.gameState.bullets.push({
                     x: b.x + Math.cos(b.rotation) * 25,
                     y: b.y + Math.sin(b.rotation) * 25,
                     rot: finalRot,
                     speed: bulletSpeed,
-                    damage: s.damage || 0,
+                    damage: botWeapon.damage || 0,
                     maxRange: effectiveRange,
                     distTravelled: 0,
                     decayed: false,
@@ -401,37 +400,25 @@ export class GameSimulation {
         const weaponDef = ItemDatabase[activeItem.typeId];
         if (!weaponDef) return;
 
-        if (weaponDef.type === 'melee') {
-            p.shootTimer = 10.0 / Math.max(1, weaponDef.stats.fireRate);
+        const weapon = new Weapon(weaponDef, activeItem);
+
+        if (weapon.isMelee) {
+            p.shootTimer = weapon.cooldown;
             return;
         }
 
-        if (weaponDef.type !== 'weapon' || !weaponDef.stats) return;
+        if (!weapon.canFire()) return;
+        weapon.consumeRound();
 
-        if (activeItem.currentMag !== undefined) {
-            if (activeItem.currentMag <= 0) return;
-            activeItem.currentMag--;
-        }
+        p.shootTimer = weapon.cooldown;
 
-        const s = weaponDef.stats;
-        let fr = Math.max(1, s.fireRate);
-        p.shootTimer = 10.0 / fr; 
-
-        let dmgAmount = 10;
-        let pelletCount = 1;
-        if (typeof s.damage === 'string' && s.damage.includes('x')) {
-            const parts = s.damage.split('x');
-            dmgAmount = parseFloat(parts[0]) || 0;
-            pelletCount = parseInt(parts[1]) || 1;
-        } else {
-            dmgAmount = parseFloat(s.damage) || 0;
-        }
+        const { damage: dmgAmount, pelletCount } = weapon.parseDamage();
 
         if (!p.consecutiveShots) p.consecutiveShots = 0;
         if (!p.lastShotTime) p.lastShotTime = 0;
         
         let nowMs = this.gameState.time * 1000;
-        let frInterval = 10000 / fr; 
+        let frInterval = 10000 / weapon.fireRate; 
         
         if (nowMs - p.lastShotTime > frInterval + 100) {
             p.consecutiveShots = 0;
@@ -439,23 +426,11 @@ export class GameSimulation {
         p.consecutiveShots++;
         p.lastShotTime = nowMs;
 
+        const { currentSpread } = weapon.getSpread(p.consecutiveShots, pelletCount);
+        const jitterMagnitude = weapon.getJitterMagnitude(p.strengthTimer);
+        const { bulletSpeed, effectiveRange } = weapon.getProjectileData();
+
         for (let pl = 0; pl < pelletCount; pl++) {
-            let maxSpreadRad = 0.33;
-            if (pelletCount > 1) maxSpreadRad = 0.5;
-
-            let baseSpread = maxSpreadRad * (1 - (s.accuracy / 100));
-            let currentSpread = 0;
-            if (pelletCount > 1) {
-                currentSpread = baseSpread;
-            } else if (p.consecutiveShots > 3) {
-                let extra = p.consecutiveShots - 3;
-                let spreadMult = Math.min(1.0, extra / 7.0);
-                currentSpread = baseSpread * spreadMult;
-            }
-
-            let jitterMagnitude = (1 - (s.recoil / 100)) * 0.10;
-            if (p.strengthTimer > 0) jitterMagnitude *= 0.5;
-            
             let horizontalJitter = (MathUtils.seededRandom() * 2 - 1) * jitterMagnitude;
             let bulletJitter = (p.consecutiveShots > 3) ? horizontalJitter : 0;
 
@@ -466,9 +441,6 @@ export class GameSimulation {
             let angleOffset = spreadRand * currentSpread + bulletJitter;
             let finalRot = p.rotation + angleOffset;
 
-            let bulletSpeed = Math.max(10, s.velocity) * 20;
-            let effectiveRange = Math.max(10, s.range) * 20;
-
             this.gameState.bullets.push({
                 x: (p.x + p.recoilOffset.x) + Math.cos(p.rotation) * 25,
                 y: (p.y + p.recoilOffset.y) + Math.sin(p.rotation) * 25,
@@ -478,8 +450,8 @@ export class GameSimulation {
                 maxRange: effectiveRange,
                 distTravelled: 0,
                 decayed: false,
-                armorPen: s.armorPen || 1.0,
-                ammoId: activeItem.loadedAmmoId || null,
+                armorPen: weapon.armorPen,
+                ammoId: weapon.loadedAmmoId,
                 owner: p.id
             });
             
@@ -488,11 +460,7 @@ export class GameSimulation {
             }
         }
 
-        let recoilBonus = (p.strengthTimer > 0) ? 10 : 0;
-        let finalRecoil = Math.max(0, s.recoil - recoilBonus);
-        let kickbackForce = (1 - (finalRecoil / 100)) * 450;
-        let kickX = -Math.cos(p.rotation) * kickbackForce * 0.016;
-        let kickY = -Math.sin(p.rotation) * kickbackForce * 0.016;
+        const { kickX, kickY } = weapon.getKickback(p.strengthTimer, p.rotation);
 
         if (!this.checkWallCollision(p.x + p.recoilOffset.x + kickX, p.y + p.recoilOffset.y)) {
             p.recoilOffset.x += kickX;
