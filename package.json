@@ -5,10 +5,15 @@
   "main": "server.mjs",
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "jsdom": "^29.1.1",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.0"
   }
 }
